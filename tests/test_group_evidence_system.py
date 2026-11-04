@@ -1,4 +1,4 @@
-"""Isolated API, migration and domain regression checks. Never modifies live data."""
+"""Isolated API and domain regression checks. Never modifies live data."""
 import base64
 import json
 import os
@@ -39,7 +39,6 @@ from group_watch.evidence.domain import duration_delta
 from group_watch.evidence.domain import normalize_account
 from group_watch.evidence.domain import suggestion
 from group_watch.evidence.domain import risk_members
-from group_watch.evidence import import_reference
 
 PNG = base64.b64encode(base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jGZkAAAAASUVORK5CYII=')).decode()
 
@@ -206,23 +205,6 @@ class SystemTests(unittest.TestCase):
             self.assertEqual(self.request('/api/profiles')['items'][key]['nickname'],'测试成员')
             self.assertEqual(remote.call_count,0)
 
-    def test_reference_snapshot_exactness_and_idempotence(self):
-        source = Path(os.environ.get('GROUP_EVIDENCE_REFERENCE', 'E:/cache/dl/留证/记录传输包-20261022'))
-        snapshot = Path(__file__).parent/'data/reference-tables.json'
-        if not source.exists() or not snapshot.exists():
-            self.skipTest('Reference source and local snapshot are optional for generic regression runs')
-        tables = json.loads(snapshot.read_text(encoding='utf-8-sig'))
-        records,rules,report = import_reference.build(source,tables,'测试导入群')
-        self.assertEqual((len(records),len(rules),report['matched_images'],len(report['missing_evidence'])),(35,24,32,13))
-        original = [[str(int(x)) if isinstance(x,float) and x.is_integer() else str(x or '').strip() for x in row[:5]] for t in tables if t['file']=='记录' for row in t['rows'][1:] if any(row[:5])]
-        self.assertEqual([[r['member'],r['reason'],r['occurrence'],r['penalty_text'],r['incident']] for r in records],original)
-        result = import_reference.apply(records,rules,report,self.store)
-        self.assertEqual((result['added_records'],result['added_rules']),(35,24))
-        repeated = import_reference.apply(records,rules,report,self.store)
-        self.assertTrue(repeated['already_imported'])
-        self.assertEqual(len(self.store.get_records()),35)
-        self.assertEqual(sum(len(r['images']) for r in self.store.get_records()),32)
-        self.assertEqual(len(list(self.store.uploads.iterdir())),len({i['url'] for r in records for i in r['images']}))
 
 
 class DomainTests(unittest.TestCase):

@@ -208,7 +208,7 @@ def test_review_failure_diagnostics_keep_evidence_pending_and_redact_secrets(tmp
         assert saved['state']=='pending' and saved['attempts']==1 and saved['next_try']>time.time()
         assert saved['error']==monitor.review_error and monitor.quota.calls_hour(time.time())==1
         if failure=='length':
-            assert json.loads(next((tmp_path/'logs'/'ds-requests').rglob('*.json')).read_text())['output']['usage']['completion_tokens']==3500
+            assert json.loads(next((tmp_path/'logs'/'ds-requests').rglob('*.json')).read_text(encoding='utf-8'))['output']['usage']['completion_tokens']==3500
         await monitor.stop()
     asyncio.run(run())
 

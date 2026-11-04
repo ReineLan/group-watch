@@ -4,7 +4,6 @@ from types import SimpleNamespace
 import httpx,pytest
 from group_watch.monitoring.chat import ChatPresentation
 from group_watch.evidence.profiles import download_avatar
-from group_watch.evidence.import_reference import image_date
 from group_watch.evidence.store import RecordStore
 from group_watch.monitoring.store import Store
 PNG=base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jGZkAAAAASUVORK5CYII=')
@@ -22,30 +21,6 @@ def test_invalid_primary_uses_160_fallback(monkeypatch):
     def download(url):calls.append(url);return b'bad' if len(calls)==1 else PNG
     monkeypatch.setattr('group_watch.evidence.profiles.download',download)
     assert download_avatar('12345')==(PNG,'.png') and 'spec=160' in calls[1]
-def test_import_image_dates_do_not_guess_conflicting_or_invalid_dates():
-    assert image_date([{'name':'261015-1.png'},{'name':'261016-1.png'}])==''
-    assert image_date([{'name':'20261015-1.png'}])=='2026-10-15'
-    assert image_date([{'name':'260231-1.png'}])==''
-
-def test_import_has_one_undo_snapshot_and_repeated_import_has_none(tmp_path,monkeypatch):
-    from group_watch.evidence.import_reference import apply
-    monkeypatch.setenv('GROUP_EVIDENCE_PROFILES','0')
-    store=RecordStore(tmp_path/'archive');store.initialize(store.data)
-    row=dict(id='import-row',member_id='12345',group_id=100000001,event_date='2026-10-29',reason='证据',punishment='警告',images=[])
-    rule=dict(id='import-rule',reason='证据',steps=['警告'],notes='')
-    try:
-        result=apply([row],[rule],{},store)
-        assert result['added_records']==1 and result['added_rules']==1
-        audit=store.overview()['audit'][0]
-        assert store.backup_path(audit['backup']).is_file()
-        assert store.overview()['backup_count']==1
-        repeated=apply([row],[rule],{},store)
-        assert repeated['already_imported'] and repeated['added_rules']==0
-        assert store.overview()['backup_count']==1
-        store.rollback(audit['backup'])
-        assert store.get_records()==[] and store.get_rules()==[]
-    finally:
-        store.close()
 def test_pending_resources_survive_restart_and_missing_files_are_reloaded(tmp_path):
     async def run():
         store=Store(tmp_path/'watch.db');case=saved_case(store);calls=[]
