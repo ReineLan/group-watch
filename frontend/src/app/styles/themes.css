@@ -1,0 +1,93 @@
+/* Semantic theme tokens. Every surface, text and line color in the workbench resolves through these. */
+:root,.scene-theme-tokens,[data-theme=huadian]{
+  color-scheme:light;
+  --scene-bg:#b5e0d2;
+  --ink:#243f36;--ink-2:#3b574c;--muted:#58746a;--subtle:#6b8678;--faint:#8a9a88;
+  --accent:#126c55;--accent-strong:#085641;--accent-2:#66a78c;--highlight:#2b977b;--on-accent:#fff;
+  --surface:#fcfffb;--surface-2:#f2f8f0;--surface-3:#e6f1e4;--surface-4:#d6e8d8;
+  --line:rgba(33,93,70,.17);--line-1:#e1e8de;--line-2:#c4d7cc;--line-3:#9eb59f;--glass-edge:#fff;
+  --panel:rgba(247,255,251,.88);--sidebar:rgba(229,250,239,.8);
+  --shadow:#16503b;--scrim:#123a2b;
+  --warn:#8a6c21;--warn-soft:#f6f0db;--warn-line:#e0c487;--danger:#a84d3c;--danger-soft:#f8e8df;--danger-line:#d99e80;--info:#5d7f9c;
+  --scene-blur:0px;--scene-position:center;--scene-opacity:.72;--scene-login-opacity:.8;--scene-filter:hue-rotate(-12deg) saturate(.88);
+  --wash:linear-gradient(125deg,#defae86b,#b5ded377);
+  --haze-a:#fff9db66;--haze-b:#397c6a30;--foreground-a:#367c6d20;--foreground-b:#f0fff11c;
+  --sun:#fff4c7df;--sun-ray:#fff8dfb5;--sun-ray-soft:#fff3c672;--shade:#4f6b4e30;
+  --sun-core:#fffbe6;--sun-gold:#ffe49a;--sparkle:#fffdf0;--sun-sweep:#fff8de8c;--sun-strength:.82;
+  --glow-a:#fff8c888;--glow-b:#93ffda69;--mote:#fffdecca;--mote-b:#d7ffeec0;
+  --petal-a:#fff;--petal-b:#fff;--petal-c:#fff;--petal-glow:transparent;
+  --veil:transparent;
+  --hero-art-opacity:.76;--hero-art-position:center 56%;
+}
+[data-theme=chunxi]{
+  color-scheme:light;
+  --scene-bg:#eef1dc;
+  --ink:#2d3524;--ink-2:#45503a;--muted:#646d58;--subtle:#7f8676;--faint:#a0a296;
+  --accent:#5f7a1c;--accent-strong:#465d10;--accent-2:#a2b355;--highlight:#a45db9;--on-accent:#fff;
+  --surface:#fffcfe;--surface-2:#fbf3f9;--surface-3:#f3f3e4;--surface-4:#e6ebd2;
+  --line:rgba(95,122,28,.16);--line-1:#eee5ec;--line-2:#ddd3db;--line-3:#b9b1c0;--glass-edge:#fff;
+  --panel:rgba(255,251,254,.86);--sidebar:rgba(253,248,252,.8);
+  --shadow:#3d4a1c;--scrim:#262a14;
+  --scene-blur:7px;--scene-position:center 34%;--scene-opacity:.94;--scene-login-opacity:1;--scene-filter:saturate(1.02);
+  --wash:linear-gradient(125deg,#fffaf47a,#f8eef85c 52%,#eaf1cc4d);
+  --haze-a:#fffdf266;--haze-b:#a45db91c;--foreground-a:#a45db91a;--foreground-b:#ffffff2a;
+  --sun:#fff6d8e6;--sun-ray:#ffe9aeb8;--sun-ray-soft:#fff0c878;--shade:#6d7a3a30;
+  --sun-core:#fff7d8;--sun-gold:#ffcf5c;--sparkle:#fffef6;--sun-sweep:#fff1bcb8;--sun-strength:1;
+  --glow-a:#fff4d08f;--glow-b:#e6c8f566;--mote:#ffffffd8;--mote-b:#f0dcffc0;
+  --veil:radial-gradient(closest-side,#fffaf8c4,#fffaf866 55%,transparent);
+  --hero-art-opacity:.92;--hero-art-position:center 30%;
+}
+[data-theme=feihua]{
+  color-scheme:light;
+  --scene-bg:#d6e6f1;
+  --ink:#352f4a;--ink-2:#4f4864;--muted:#6c6480;--subtle:#887f9b;--faint:#a79eb6;
+  --accent:#ad4d6a;--accent-strong:#8a3752;--accent-2:#98c4dd;--highlight:#c46d88;--on-accent:#fff;
+  --surface:#fffbfd;--surface-2:#f9f2f8;--surface-3:#efe6f1;--surface-4:#e2d5e5;
+  --line:rgba(138,55,82,.15);--line-1:#efe3ec;--line-2:#dccbdb;--line-3:#bba9c2;--glass-edge:#fff;
+  --panel:rgba(255,250,253,.86);--sidebar:rgba(252,246,251,.8);
+  --shadow:#4a2c4f;--scrim:#2c2238;
+  --scene-blur:8px;--scene-position:center 32%;--scene-opacity:.95;--scene-login-opacity:1;--scene-filter:saturate(1);
+  --wash:linear-gradient(125deg,#f4f9ff66,#fbeef55c 52%,#d8c5db4d);
+  --haze-a:#ffffff4d;--haze-b:#c46d881f;--foreground-a:#c46d881a;--foreground-b:#98c4dd26;
+  --glow-a:#fff2f88a;--glow-b:#b8dcf266;--mote:#ffffffc8;--mote-b:#ffe0ecc0;
+  --petal-a:#ffe9f0;--petal-b:#f28fb0;--petal-c:#d9688f;--petal-glow:transparent;
+  --veil:radial-gradient(closest-side,#fbf7fcc4,#fbf7fc66 55%,transparent);
+  --hero-art-opacity:.9;--hero-art-position:center 28%;
+}
+[data-theme=shuizhong]{
+  color-scheme:dark;
+  --scene-bg:#141033;
+  --ink:#efecff;--ink-2:#d6d2f3;--muted:#aea9da;--subtle:#918cc1;--faint:#7570a5;
+  --accent:#b6b0f2;--accent-strong:#d9d5ff;--accent-2:#6f8fd0;--highlight:#e79ae6;--on-accent:#1b1640;
+  --surface:#211c4b;--surface-2:#272157;--surface-3:#2e2862;--surface-4:#383171;
+  --line:rgba(169,163,216,.2);--line-1:#373169;--line-2:#474083;--line-3:#635da5;--glass-edge:#7c76c4;
+  --panel:rgba(29,24,68,.86);--sidebar:rgba(22,18,54,.78);
+  --shadow:#03020b;--scrim:#070514;
+  --warn:#f0c879;--warn-soft:#3a3124;--warn-line:#8a7140;--danger:#ffa1b0;--danger-soft:#45233b;--danger-line:#9a4a64;--info:#a2c4ff;
+  --scene-blur:6px;--scene-position:center 42%;--scene-opacity:1;--scene-login-opacity:1;--scene-filter:saturate(1.06);
+  --wash:linear-gradient(125deg,#0c092866,#1a163f33 52%,#28204e8c);
+  --haze-a:#9fb4ff1c;--haze-b:#28204e70;--foreground-a:#526c9e30;--foreground-b:#a9a3d814;
+  --glow-a:#7f9cff3a;--glow-b:#c77dff36;--mote:#ece8ffd8;--mote-b:#ffb6f0c0;
+  --petal-a:#ffc4f1;--petal-b:#e070dc;--petal-c:#a98cff;--petal-glow:#ff7ee0b0;
+  --veil:radial-gradient(closest-side,#0f0b2eb8,#0f0b2e55 55%,transparent);
+  --hero-art-opacity:.85;--hero-art-position:center 40%;
+}
+html{background:var(--scene-bg);scrollbar-color:color-mix(in srgb,var(--line-3) 70%,transparent) transparent}
+::selection{background:color-mix(in srgb,var(--accent-2) 45%,transparent);color:var(--ink)}
+.scene-stage{position:fixed;inset:0;z-index:0;overflow:hidden;contain:strict;pointer-events:none}
+.scene-transition-host{position:absolute;inset:0;overflow:hidden;contain:strict;pointer-events:none}
+@property --theme-reveal-radius{syntax:'<length>';inherits:false;initial-value:0px}
+.theme-reveal-layer{position:absolute;inset:0;overflow:hidden;pointer-events:none!important}
+.scene-composite-group{position:absolute!important;inset:0;contain:strict;isolation:isolate;overflow:hidden;background:var(--scene-bg)}
+/* E3: group the moving scene before its outer circle clips the result.
+   Full-screen bases stay unfiltered. */
+.theme-reveal-layer[style*="circle("]>.scene-composite-group{filter:opacity(1)}
+.theme-reveal-layer *{pointer-events:none!important}
+
+/* Compact/touch scenery has no screen glow: do not force E3 grouping there. */
+@media(max-width:800px),(hover:none),(pointer:coarse){
+ .theme-reveal-layer[style*="circle("]>.scene-composite-group{filter:none}
+}
+
+/* Keep browser recoloring disabled while application theme tokens own colors. */
+:root{color-scheme:only light!important}

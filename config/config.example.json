@@ -1,0 +1,16 @@
+{
+  "groups": [
+    100000001,
+    100000002
+  ],
+  "protected_groups": [123456],
+  "protected_qq": 100000003,
+  "live_rooms": {"1": "示例直播间"},
+  "snowluma_config": "runtime/snowluma/config/onebot_YOUR_QQ.json",
+  "db_path": "data/group-watch.sqlite3",
+  "evidence_data": "data/group-evidence",
+  "local_env": "config/.env",
+  "query_calls_hour": 5,
+  "flood_count": 10,
+  "flood_seconds": 60
+}

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-label="Example landscape: chunxi">
+<!-- Original group-watch example artwork; MIT license, see repository LICENSE. -->
+<defs><linearGradient id="sky" x2="0" y2="1"><stop stop-color="#f6f1df"/><stop offset="1" stop-color="#d3e4c1"/></linearGradient><linearGradient id="water" x2="0" y2="1"><stop stop-color="#d3e4c1"/><stop offset="1" stop-color="#718f75"/></linearGradient></defs>
+<path fill="url(#sky)" d="M0 0h1600v900H0z"/>
+<circle cx="1280" cy="205" r="84" fill="#fff8d7" opacity=".85"/>
+<path d="M0 510Q180 335 390 505T820 470T1240 420T1600 455V900H0Z" fill="#a0b58b"/>
+<path d="M0 590Q220 435 440 585T900 560T1330 530T1600 565V900H0Z" fill="#718f75"/>
+<path d="M0 660Q400 615 800 655T1600 640V900H0Z" fill="url(#water)"/>
+<g fill="none" stroke="#fff8d7" stroke-linecap="round" opacity=".28"><path d="M1060 710h300M1140 740h270M990 775h330M1180 815h180" stroke-width="4"/></g>
+<path d="M0 770Q140 690 310 785T620 900H0Z M1600 740Q1440 775 1320 900H1600Z" fill="#466b61"/>
+<g fill="#fff8d7" opacity=".5"><circle cx="115" cy="739" r="4"/><circle cx="180" cy="749" r="3"/><circle cx="233" cy="771" r="4"/></g>
+</svg>

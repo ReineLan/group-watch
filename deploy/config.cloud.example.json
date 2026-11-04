@@ -1,0 +1,15 @@
+{
+  "groups": [100000001, 100000002],
+  "live_rooms": {"1": "示例直播间"},
+  "public_url": "https://watch.example.com",
+  "ws_url": "ws://127.0.0.1:3001/",
+  "ws_token": "",
+  "snowluma_config": "",
+  "local_env": "config/.env",
+  "db_path": "data/group-watch.sqlite3",
+  "evidence_data": "data/group-evidence",
+  "automatic_updates": false,
+  "max_ds_calls_hour": 5,
+  "flood_count": 10,
+  "flood_seconds": 60
+}

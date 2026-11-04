@@ -1,0 +1,7 @@
+include tools/build_support.py
+include uv.lock
+include config/config.example.json
+include config/.env.example
+include LICENSE
+include THIRD_PARTY_NOTICES.md
+recursive-include frontend/dist *

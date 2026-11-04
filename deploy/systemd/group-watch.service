@@ -1,0 +1,27 @@
+[Unit]
+Description=Lan group management workbench
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=group-watch
+Group=group-watch
+WorkingDirectory=/srv/group-watch
+ExecStart=/srv/group-watch/.venv/bin/python -m group_watch web --config config/config.json --port 8066
+Environment=PYTHONUNBUFFERED=1
+Environment=TZ=Asia/Shanghai
+Restart=always
+RestartSec=5
+TimeoutStopSec=90
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/srv/group-watch/config /srv/group-watch/data /srv/group-watch/logs
+
+[Install]
+WantedBy=multi-user.target

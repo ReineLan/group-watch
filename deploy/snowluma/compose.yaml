@@ -1,0 +1,38 @@
+name: group-watch-gateway
+
+services:
+  snowluma:
+    image: ${SNOWLUMA_IMAGE:?Set SNOWLUMA_IMAGE to a verified tag or digest}
+    restart: unless-stopped
+    shm_size: 1gb
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - seccomp=unconfined
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 1048576
+    environment:
+      TZ: Asia/Shanghai
+      SNOWLUMA_ONEBOT_HOST: 0.0.0.0
+      SNOWLUMA_WEBUI_HOST: 0.0.0.0
+      SNOWLUMA_WEBUI_PORT: "5099"
+    ports:
+      - "127.0.0.1:6081:6081"
+      - "127.0.0.1:5099:5099"
+      - "127.0.0.1:3001:3001"
+    volumes:
+      - gateway-data:/app/data
+      - qq-config:/app/.config
+      - qq-data:/app/.local/share
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  gateway-data:
+  qq-config:
+  qq-data:

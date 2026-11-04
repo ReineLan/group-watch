@@ -1,0 +1,35 @@
+# Local environments
+.venv/
+node_modules/
+runtime/
+.idea/
+.vscode/
+
+# Credentials
+.env
+config.json
+
+# data
+data/*
+!data/README.md
+
+/frontend/src/shared/ui/scene/
+
+# docs
+/doc/
+logs/
+
+# builds
+dist/
+build/
+*.egg-info/
+
+# cache
+tmp/
+__pycache__/
+.ruff_cache/
+.pytest_cache/
+
+# OS files
+Thumbs.db
+.DS_Store

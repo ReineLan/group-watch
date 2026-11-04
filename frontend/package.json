@@ -1,0 +1,19 @@
+{
+  "name": "group-watch-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite build --watch --configLoader native",
+    "build": "vite build --configLoader native",
+    "test": "node --test tests/*.test.js"
+  },
+  "dependencies": {
+    "vue": "3.5.44"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.10",
+    "vite": "8.3.5"
+  },
+  "license": "MIT AND OFL-1.1"
+}
