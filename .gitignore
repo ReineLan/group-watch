@@ -15,6 +15,10 @@ data/*
 
 /frontend/src/shared/ui/scene/
 
+# deploy
+deploy-backups/
+.deployed-commit
+
 # docs
 /doc/
 logs/
