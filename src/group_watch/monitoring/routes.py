@@ -1,4 +1,4 @@
-from group_watch.web.schemas import Decision
+from group_watch.web.schemas import Decision, RegisteredCase
 from group_watch.settings import ROOT, push_recipients
 from group_watch.monitoring.store import MONITORED_CASE
 from group_watch.monitoring.rules import LIMITATIONS, POLICIES, readable_message
@@ -13,7 +13,7 @@ from fastapi.responses import Response, FileResponse
 import re
 
 
-def install(app, cfg, monitor, chat, auth, started):
+def install(app, cfg, monitor, chat, auth, started, evidence=None):
     @app.post('/internal/events/live')
     async def live_events(request: Request):
         token = cfg.live_forward_token.get_secret_value()
@@ -105,6 +105,21 @@ def install(app, cfg, monitor, chat, auth, started):
             return [{key:case[key] for key in keys} for case in rows]
         return rows
 
+
+    @app.post('/api/cases/{case_id}/registered')
+    async def registered_case(case_id: str, body: RegisteredCase):
+        """Delete the clue only after the saved archive records are confirmed."""
+        ids = list(dict.fromkeys(body.record_ids))
+        if not ids:
+            raise HTTPException(409, '登记结果未确认，线索保留')
+        if evidence is not None:
+            with evidence.connect() as db:
+                found = {row['id'] for row in db.execute(
+                    'SELECT id FROM records WHERE id IN (%s)' % ','.join('?' * len(ids)), ids)}
+            if found != set(ids):
+                raise HTTPException(409, '登记档案未落库，线索保留')
+        deleted = await chat.discard_case(case_id)
+        return {'ok': True, 'deleted': deleted}
 
     @app.delete('/api/cases/{case_id}')
     async def delete_case(case_id: str):

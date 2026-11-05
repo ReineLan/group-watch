@@ -34,6 +34,34 @@ def test_delete_api_requires_auth_csrf_and_handled_case(tmp_path,monkeypatch):
         assert monitor.feedback.points()[0]['summary']=='保留人工反馈'
         assert client.delete(url).status_code==404
 
+def test_registered_api_deletes_case_only_after_records_exist(tmp_path,monkeypatch):
+    import re
+    from fastapi.testclient import TestClient
+    from group_watch.app import create_app
+    from group_watch.monitoring.service import Monitor
+    from test_moderation_feedback import settings
+    monkeypatch.setenv('GROUP_EVIDENCE_PROFILES','0')
+    monitor=Monitor(settings(tmp_path));row=saved_case(monitor.store)
+    async def start(): pass
+    async def stop(): monitor.store.db.close()
+    monitor.start,monitor.stop=start,stop
+    with TestClient(create_app(monitor.cfg,monitor)) as client:
+        url='/api/cases/'+row['id']+'/registered'
+        assert client.post(url,json={'record_ids':['missing']}).status_code==401
+        assert client.post('/api/auth/login',json={'token':'中文测试密码'}).status_code==200
+        client.headers['x-csrf-token']=re.search(r'name="csrf-token" content="([^"]+)',client.get('/').text)[1]
+        assert client.post(url,json={'record_ids':['missing']}).status_code==409
+        assert monitor.store.cases('id=?',(row['id'],))
+        body={'member_id':'12345','group_id':100000001,'nickname':None,'card':None,
+              'event_date':'2026-01-01','reason':'测试','punishment':'警告','penalty_text':'警告',
+              'operator':'','notes':'','occurrence':'','images':[]}
+        record=client.post('/evidence/api/records',json=body).json()
+        assert record['ids']
+        assert client.post(url,json={'record_ids':record['ids']}).json()=={'ok':True,'deleted':True}
+        assert not monitor.store.cases('id=?',(row['id'],))
+        assert client.post(url,json={'record_ids':record['ids']}).json()=={'ok':True,'deleted':False}
+
+
 def test_delete_checks_handled_state_after_waiting_for_lock(tmp_path):
     async def run():
         store=Store(tmp_path/'watch.db');row=saved_case(store)

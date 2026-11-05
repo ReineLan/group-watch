@@ -7,6 +7,10 @@ class Decision(BaseModel):
     note: str | None = Field(None, max_length=2000)
 
 
+class RegisteredCase(BaseModel):
+    record_ids: list[str] = Field(default_factory=list, max_length=50)
+
+
 class PushSettings(BaseModel):
     model_config = {'extra': 'forbid'}
     recipients: list[PushRecipient] = Field(max_length=10)

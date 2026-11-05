@@ -6,7 +6,7 @@ import RecordEditor from '../../../entities/evidence/ui/RecordEditor.vue'
 import AppIcon from '../../../shared/ui/AppIcon.vue'
 import { time, states, count } from '../../../shared/lib/format.js'
 const props = defineProps({ active: Boolean, pending: Number, totals: Object, scene: Object })
-const { api, status, notify, loadStatus } = useWorkspace(), { draft, records, load, loaded, interacting } = useEvidence()
+const { api, status, notify, loadStatus } = useWorkspace(), { draft, load, loaded, interacting } = useEvidence()
 const recent = shallowRef([]), editing = ref(false), batch = ref(false), editDraft = ref(null)
 const metrics = computed(() => [
     { key: 'open', href: '#events', icon: 'inbox', tone: 'accent', label: '待人工核查', value: props.pending, hint: 'DS 已筛出，等你确认' },
@@ -20,16 +20,21 @@ async function consumeDraft() {
     if (!props.active || !draft.value) return
     if (!loaded.value) { try { await load() } catch { return } }
     const value = draft.value; if (!value) return; draft.value = null
-    if (value.source && records.value.some(r => r.source === value.source)) { notify('这条线索已经登记过了'); location.hash = 'records'; return }
     register(false, value)
 }
 watch(() => props.active, active => { if (active) { consumeDraft() } else editing.value = false }, { immediate: true })
 watch(draft, consumeDraft)
 watch(editing, value => interacting.value = value)
-async function saved({ source }) {
-    if (!source?.startsWith('group-watch:')) return
-    try { await api('/api/cases/' + encodeURIComponent(source.slice(12)) + '/decision', { resolution: 'confirmed' }); await loadStatus(); await refresh() }
-    catch (e) { notify('档案已保存，但线索状态没有同步：' + e.message) }
+async function saved({ ids = [], caseId = '' } = {}) {
+    if (!caseId) return
+    if (!ids.length) { notify('档案已保存，但登记结果未确认，原线索已保留'); return }
+    try {
+        await api('/api/cases/' + encodeURIComponent(caseId) + '/registered', { record_ids: ids })
+        notify('档案已保存，原线索已删除')
+    } catch (e) {
+        notify('档案已保存，但原线索未删除：' + e.message)
+    }
+    await loadStatus(); await refresh()
 }
 defineExpose({ refresh })
 </script>

@@ -39,6 +39,27 @@ def test_ad_needs_action_or_mass_forwarding():
     assert 'ad' in hits('群号 123456789')
 
 
+def test_repeat_ignores_media_only_messages_and_placeholders():
+    image = [{'type': 'image', 'data': {'file': 'a.jpg', 'url': 'https://gchat.qpic.cn/a'}}]
+
+    def message(mid, segments, text=''):
+        return dict(text=text, mentions=[], user_id=1, message_id=mid, time=1000.0,
+                    media=['image'], segments=segments)
+
+    def detected(segments, text=''):
+        # Ingest inserts the current message into the window before detection runs.
+        recent = [message(f'i{n}', segments, text) for n in range(3)] + [message('now', segments, text)]
+        return detect(CFG, recent[-1], recent)
+
+    assert 'repeat' not in detected(image)
+
+    placeholder = [{'type': 'text', 'data': {'text': '[图片]'}}, *image]
+    assert 'repeat' not in detected(placeholder, '[图片]')
+
+    caption = [{'type': 'text', 'data': {'text': '哈哈'}}, *image]
+    assert 'repeat' in detected(caption, '哈哈')
+
+
 def test_card_urls_are_readable_text_not_ads():
     card = json.dumps({'prompt': '群相册《兰图》',
                        'meta': {'feed': {'cover': 'http://qungz.photo.store.qq.com/x'}}})

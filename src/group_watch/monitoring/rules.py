@@ -51,6 +51,9 @@ ABUSE_WEAK = re.compile(r'傻[逼比bB]|死(?:妈|全家)|废物|滚出去|脑�
 ABUSE_TARGET = re.compile(r'你(?!妈)|您|你们|这人|楼上|群友|管理|群主|@\d+')
 SYSTEM_PREFIXES = ('生成失败：', '生成失败:')
 SYSTEM_MARKERS = ('upstream_text_reply',)
+# Some OneBot implementations render media as text segments. They are display
+# labels, not message content, so they must never make unrelated media look alike.
+MEDIA_PLACEHOLDERS = frozenset({'[图片]'})
 
 
 def normalize(text):
@@ -161,10 +164,30 @@ def readable_message(msg):
     return {**msg, 'text': text}
 
 
+def repeat_text(msg):
+    """Text used for duplicate detection; empty when the message carries no words.
+
+    Only text segments count as content. Media segments (images, faces, video)
+    are never compared: their file ids differ per upload, so equal-looking
+    placeholders would otherwise flag unrelated pictures as one repeated message.
+    Cards keep their readable summary through the message text fallback.
+    """
+    segments = msg.get('segments')
+    if isinstance(segments, list) and segments:
+        pieces = [str(segment['data'].get('text') or '') for segment in segments[:200]
+                  if isinstance(segment, dict) and segment.get('type') == 'text'
+                  and isinstance(segment.get('data'), dict)]
+        value = ''.join(pieces) if pieces else (msg.get('text') or '')
+    else:
+        value = msg.get('text') or ''
+    plain = normalize(value)
+    return '' if plain in MEDIA_PLACEHOLDERS else plain
+
+
 def detect(cfg, msg, recent):
     if system_message(msg):
         return {}
-    plain = normalize(msg.get('text') or '')
+    plain = repeat_text(msg)
     text = normalize(readable_message(msg)['text'])
     own = [x for x in recent if x['user_id'] == msg['user_id']]
     hits = {}
@@ -188,8 +211,8 @@ def detect(cfg, msg, recent):
     fast = [x for x in own if x['time'] >= msg['time'] - cfg.flood_seconds]
     if len(fast) >= cfg.flood_count:
         hits['flood'] = [x['message_id'] for x in fast[-30:]]
-    # Ignore empty media placeholders: images cannot be compared reliably without hashes.
-    repeated = [x for x in own if plain and normalize(x['text']) == plain]
+    # Media-only messages have no comparable text, so different pictures never look identical.
+    repeated = [x for x in own if plain and repeat_text(x) == plain]
     if len(repeated) >= cfg.repeat_count:
         hits['repeat'] = [x['message_id'] for x in repeated[-30:]]
     if str(cfg.protected_qq) in text:
