@@ -181,7 +181,8 @@ def graceful_web(port):
 def update(port, config):
     command = [sys.executable, str(ROOT/'tools/group-watch-update.py'), '--config', str(config)]
     try:
-        result = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, encoding='utf-8', timeout=90)
+        # The check may run dependency installs and a frontend build before reporting ready.
+        result = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, encoding='utf-8', timeout=900)
         if not json.loads(result.stdout).get('ready'):
             return False
         with httpx.Client(base_url=f'http://127.0.0.1:{port}', trust_env=False, timeout=3) as client:

@@ -4,6 +4,7 @@ node_modules/
 runtime/
 .idea/
 .vscode/
+.cache/
 
 # Credentials
 .env
