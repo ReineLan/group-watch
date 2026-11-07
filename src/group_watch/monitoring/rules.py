@@ -165,18 +165,28 @@ def readable_message(msg):
 
 
 def repeat_text(msg):
-    """Text used for duplicate detection; empty when the message carries no words.
+    """Signature for duplicate detection; empty when there is nothing comparable.
 
-    Only text segments count as content. Media segments (images, faces, video)
-    are never compared: their file ids differ per upload, so equal-looking
-    placeholders would otherwise flag unrelated pictures as one repeated message.
+    Text compares by content. Media segments contribute a type:id token —
+    QQ supplies a stable file id for stickers and images, so the same media
+    counts as a repeat while id-less media stays invisible as before.
     Cards keep their readable summary through the message text fallback.
     """
     segments = msg.get('segments')
     if isinstance(segments, list) and segments:
-        pieces = [str(segment['data'].get('text') or '') for segment in segments[:200]
-                  if isinstance(segment, dict) and segment.get('type') == 'text'
-                  and isinstance(segment.get('data'), dict)]
+        pieces = []
+        for segment in segments[:200]:
+            if not isinstance(segment, dict):
+                continue
+            kind, data = segment.get('type'), segment.get('data')
+            if not isinstance(data, dict):
+                continue
+            if kind == 'text':
+                pieces.append(str(data.get('text') or ''))
+            else:
+                fid = str(data.get('file') or data.get('file_id') or data.get('emoji_id') or data.get('id') or '')
+                if fid:
+                    pieces.append(f'|{kind}:{fid}|')
         value = ''.join(pieces) if pieces else (msg.get('text') or '')
     else:
         value = msg.get('text') or ''
@@ -211,7 +221,7 @@ def detect(cfg, msg, recent):
     fast = [x for x in own if x['time'] >= msg['time'] - cfg.flood_seconds]
     if len(fast) >= cfg.flood_count:
         hits['flood'] = [x['message_id'] for x in fast[-30:]]
-    # Media-only messages have no comparable text, so different pictures never look identical.
+    # Identical media share a file-id signature; media without ids never look alike.
     repeated = [x for x in own if plain and repeat_text(x) == plain]
     if len(repeated) >= cfg.repeat_count:
         hits['repeat'] = [x['message_id'] for x in repeated[-30:]]

@@ -39,25 +39,39 @@ def test_ad_needs_action_or_mass_forwarding():
     assert 'ad' in hits('群号 123456789')
 
 
-def test_repeat_ignores_media_only_messages_and_placeholders():
-    image = [{'type': 'image', 'data': {'file': 'a.jpg', 'url': 'https://gchat.qpic.cn/a'}}]
+def test_repeat_counts_identical_media_and_keeps_others_apart():
+    def image(fid):
+        return [{'type': 'image', 'data': {'file': fid, 'url': 'https://gchat.qpic.cn/' + fid}}]
 
     def message(mid, segments, text=''):
         return dict(text=text, mentions=[], user_id=1, message_id=mid, time=1000.0,
                     media=['image'], segments=segments)
 
-    def detected(segments, text=''):
+    def detected(history):
         # Ingest inserts the current message into the window before detection runs.
-        recent = [message(f'i{n}', segments, text) for n in range(3)] + [message('now', segments, text)]
-        return detect(CFG, recent[-1], recent)
+        return detect(CFG, history[-1], history)
 
-    assert 'repeat' not in detected(image)
+    # The same sticker or image shares a stable file id, so it counts as a repeat.
+    same = [message(f'i{n}', image('a.jpg')) for n in range(3)] + [message('now', image('a.jpg'))]
+    assert 'repeat' in detected(same)
 
-    placeholder = [{'type': 'text', 'data': {'text': '[图片]'}}, *image]
-    assert 'repeat' not in detected(placeholder, '[图片]')
+    # Different file ids never look identical.
+    mixed = [message(f'i{n}', image(f'{n}.jpg')) for n in range(3)] + [message('now', image('a.jpg'))]
+    assert 'repeat' not in detected(mixed)
 
-    caption = [{'type': 'text', 'data': {'text': '哈哈'}}, *image]
-    assert 'repeat' in detected(caption, '哈哈')
+    # Media without an id stays invisible to repeat detection.
+    noid = [{'type': 'image', 'data': {'url': 'https://gchat.qpic.cn/x'}}]
+    unmarked = [message(f'i{n}', noid) for n in range(3)] + [message('now', noid)]
+    assert 'repeat' not in detected(unmarked)
+
+    # A text-only media placeholder still carries no comparable content.
+    label = [{'type': 'text', 'data': {'text': '[图片]'}}]
+    labeled = [message(f'i{n}', label, '[图片]') for n in range(3)] + [message('now', label, '[图片]')]
+    assert 'repeat' not in detected(labeled)
+
+    caption = [{'type': 'text', 'data': {'text': '哈哈'}}, *image('a.jpg')]
+    captioned = [message(f'i{n}', caption, '哈哈') for n in range(3)] + [message('now', caption, '哈哈')]
+    assert 'repeat' in detected(captioned)
 
 
 def test_card_urls_are_readable_text_not_ads():
