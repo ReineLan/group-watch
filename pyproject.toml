@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "group-watch"
-version = "0.2.2"
+version = "0.2.3"
 description = "QQ group monitoring and evidence workbench with SnowLuma"
 readme = "README.md"
 license = "MIT AND OFL-1.1"
