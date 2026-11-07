@@ -16,7 +16,7 @@
 
 ## GitHub 标识
 
-`frontend/src/shared/ui/AppIcon.vue` 中的 GitHub 标识仅用于链接到项目的 GitHub 仓库。GitHub 名称与标识属于 GitHub, Inc.，不属于本项目 MIT 授权的原创素材；使用须遵守 [GitHub 商标政策](https://docs.github.com/en/site-policy/github-terms/github-trademark-policy) 与[品牌指南](https://brand.github.com/foundations/logo)。
+`frontend/src/shared/ui/AppIcon.vue` 中的 GitHub 标识仅用于链接到项目的 GitHub 仓库。GitHub 名称与标识属于 GitHub, Inc.，不属于本项目 MIT 授权的原创素材；见 [GitHub 商标政策](https://docs.github.com/en/site-policy/github-terms/github-trademark-policy) 。
 
 ## 外部运行时与依赖
 

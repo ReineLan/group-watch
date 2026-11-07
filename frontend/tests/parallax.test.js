@@ -24,3 +24,17 @@ test('parallax keeps source and overlapping copies aligned without inherited sta
   assert.ok([...source,...copies].every(e=>e.style.transform==='translate3d(0.0000px,0.0000px,0)'))
   positionSceneLayers(null,{x:0,y:0})
 })
+
+test('a layer can declare a shallower parallax depth, as pond ripples do',()=>{
+  const water={classList:{contains:name=>name==='scene-petals'},dataset:{depth:'7'},style:{}}
+  positionSceneLayers({querySelectorAll:()=>[water]},{x:1,y:-.5})
+  assert.equal(water.style.transform,'translate3d(-7.0000px,3.5000px,0)')
+})
+
+test('depth-tagged layers are picked up, and lens ghosts move against the pointer',()=>{
+  let selector
+  const flares={classList:{contains:()=>false},dataset:{depth:'-18'},style:{}}
+  positionSceneLayers({querySelectorAll:query=>(selector=query,[flares])},{x:1,y:-.5})
+  assert.match(selector,/\[data-depth\]/)
+  assert.equal(flares.style.transform,'translate3d(18.0000px,-9.0000px,0)')
+})
