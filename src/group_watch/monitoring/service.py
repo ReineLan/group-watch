@@ -328,7 +328,7 @@ class Monitor:
             delay = min(60, delay*2)
 
     async def work(self):
-        prune_at = 0
+        prune_at = snapshot_at = 0
         while True:
             self.review_ready.clear()
             try:
@@ -338,6 +338,9 @@ class Monitor:
                 if time.time() >= prune_at:
                     self.store.prune(self.cfg.retention_days)
                     prune_at = time.time()+3600
+                if time.time() >= snapshot_at:
+                    self.store.save_activity()
+                    snapshot_at = time.time()+300
             except Exception as exc:
                 self.review_error = f'后台工作异常（{type(exc).__name__}），下轮重试'
             try:
@@ -401,4 +404,9 @@ class Monitor:
                 await task
         if self.client:
             await self.client.aclose()
-        self.store.db.close()
+        try:
+            self.store.save_activity()
+        except Exception:
+            LOG.warning('消息计数快照保存失败')
+        finally:
+            self.store.db.close()

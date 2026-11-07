@@ -123,3 +123,27 @@ def test_directory_persists_only_registered_sources_and_updates_name(tmp_path):
             await monitor.stop()
 
     asyncio.run(run())
+
+
+def test_message_activity_counts_survive_restart(tmp_path):
+    async def run():
+        cfg = config(tmp_path)
+        monitor = Monitor(cfg)
+        try:
+            monitor.ingest(event())
+            monitor.ingest(dict(event(), message_id='own-2'))
+            rows = monitor.store.window_state.activity[100000001]
+            assert len(rows) == 2
+            rows.appendleft((time.time()-90000, time.time()-90000))
+            await monitor.stop()
+        finally:
+            monitor.store.db.close()
+        restarted = Monitor(cfg)
+        try:
+            rows = restarted.store.window_state.activity[100000001]
+            assert len(rows) == 2
+            assert all(at > time.time()-86400 for at, _ in rows)
+        finally:
+            restarted.store.db.close()
+
+    asyncio.run(run())

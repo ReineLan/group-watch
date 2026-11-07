@@ -4,6 +4,7 @@ from group_watch.utils.sqlite import connect
 from group_watch.sources.members import SCHEMA as MEMBERS_SCHEMA
 import json
 import time
+from collections import deque
 from pathlib import Path
 
 MONITORED_CASE = 'NOT EXISTS (SELECT 1 FROM monitor_shared_whitelist w WHERE w.user_id=cases.user_id)'
@@ -48,9 +49,29 @@ class Store:
         CREATE TABLE IF NOT EXISTS feedback_jobs (
           source TEXT PRIMARY KEY, rule TEXT, verdict TEXT, payload TEXT, revision TEXT,
           updated REAL, attempts INTEGER DEFAULT 0, next_try REAL DEFAULT 0, error TEXT DEFAULT '');
+        CREATE TABLE IF NOT EXISTS activity_snapshot (
+          group_id INTEGER PRIMARY KEY, stamps TEXT NOT NULL DEFAULT '[]');
         ''')
         self.window_state = MessageWindow()
         self.db.executescript(MEMBERS_SCHEMA)
+        now = time.time()
+        for group, stamps in self.db.execute('SELECT group_id,stamps FROM activity_snapshot'):
+            try:
+                rows = deque(((at, stamp) for at, stamp in json.loads(stamps) if at > now-86400), maxlen=50000)
+            except (ValueError, TypeError):
+                continue  # Skip a corrupt snapshot row rather than blocking startup.
+            if rows:
+                self.window_state.activity[group] = rows
+
+    def save_activity(self):
+        # Persist only (received, sent) timestamps so the 24h count survives an update restart.
+        now = time.time()
+        with self.db:
+            self.db.execute('DELETE FROM activity_snapshot')
+            for group, rows in self.window_state.activity.items():
+                kept = [[at, stamp] for at, stamp in rows if at > now-86400]
+                if kept:
+                    self.db.execute('INSERT INTO activity_snapshot VALUES(?,?)', (group, dumps(kept)))
 
     def whitelist(self):
         return [dict(row) for row in self.db.execute('SELECT user_id,nickname FROM monitor_shared_whitelist ORDER BY user_id')]
