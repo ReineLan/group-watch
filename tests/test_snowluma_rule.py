@@ -20,3 +20,21 @@ def test_snowluma_status_confirms_violation_without_review(tmp_path):
     assert [(case['rule'], case['confidence']) for case in cases] == [('snowluma', 1.0)]
     assert not monitor.store.window_state.candidates
     monitor.store.db.close()
+
+
+def test_blocked_word_confirms_violation_without_review(tmp_path):
+    monitor = Monitor(Settings(db_path=str(tmp_path / 'watch.db'),
+                               local_env=str(tmp_path / '.env'),
+                               settings_file=str(tmp_path / 'rules.json'),
+                               blocked_words=['违禁词样例']))
+    now = time.time()
+    count = monitor.ingest({'post_type': 'message', 'message_type': 'group',
+                            'group_id': 100000001, 'user_id': 778, 'message_id': 'b1',
+                            'time': now, 'message': '这条消息里藏了违禁词样例',
+                            'sender': {'nickname': 'someone'}}, now)
+
+    assert count == 1
+    cases = monitor.store.cases()
+    assert [(case['rule'], case['confidence']) for case in cases] == [('blocked', 1.0)]
+    assert not monitor.store.window_state.candidates
+    monitor.store.db.close()

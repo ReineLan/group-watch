@@ -179,8 +179,8 @@ class Monitor:
             if not ident:
                 continue
             count += 1
-            # Bot status replies are unambiguous; confirm without spending a DS call.
-            if rule == 'snowluma':
+            # Bot status replies and owner-configured blocked words are unambiguous; confirm without spending a DS call.
+            if rule in ('snowluma', 'blocked'):
                 self.store.update(ident, state='violation', reason=POLICIES[rule][0], confidence=1.0, error='')
         if count:
             self.review_ready.set()
