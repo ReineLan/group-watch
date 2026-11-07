@@ -175,7 +175,7 @@ export function installThemeDiagnostics({selectTheme,resetTheme,prepareImages,pa
     menu.onchange=()=>{const url=new URL(location.href);url.searchParams.set(mode==='image-startup'?'image-preparation':'video-enabled',menu.value);location.assign(url.href)}
     label.append(menu);panel.append(label)
     const explanation=document.createElement('div')
-    explanation.textContent=mode==='image-startup'?'固定E3、无视频、春熙→浮梦→晴庭，只改变目标图片是否提前decode。':'固定E3、春熙→浮梦→澄漪，两种条件都先decode相同图片，只改变澄漪视频开关。'
+    explanation.textContent=mode==='image-startup'?'固定E3、无视频、春熙→浮梦→梦雪，只改变目标图片是否提前decode。':'固定E3、春熙→浮梦→澄漪，两种条件都先decode相同图片，只改变澄漪视频开关。'
     panel.append(explanation)
     if(startupControl.prepareImages){
       const prepare=document.createElement('button');prepare.textContent='准备本轮目标图片'
@@ -258,9 +258,9 @@ export function installThemeDiagnostics({selectTheme,resetTheme,prepareImages,pa
         await resetTheme('chunxi')
         await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))
         if(staticMode){experiment.hold=true;experiment.holdProgress=.6}
-        phase('start',{videoScenario:startupControl?`${mode}:${root.dataset.imagePreparation}:${root.dataset.videoControl}`:withoutVideo||count===1?'without-video':'includes-shuizhong',choices:withoutVideo?['feihua','huadian']:['feihua','shuizhong','huadian'].slice(0,count)})
+        phase('start',{videoScenario:startupControl?`${mode}:${root.dataset.imagePreparation}:${root.dataset.videoControl}`:withoutVideo||count===1?'without-video':'includes-shuizhong',choices:withoutVideo?['feihua','mengxue']:['feihua','shuizhong','mengxue'].slice(0,count)})
         const point={x:Math.round(innerWidth*.89),y:Math.round(innerHeight*.94)}
-        const choices=withoutVideo?['feihua','huadian']:['feihua','shuizhong','huadian'].slice(0,count),pending=[]
+        const choices=withoutVideo?['feihua','mengxue']:['feihua','shuizhong','mengxue'].slice(0,count),pending=[]
         for(const [index,id] of choices.entries()){
           if(index)await new Promise(resolve=>setTimeout(resolve,200))
           recordSelection(id,performance.now(),point)
@@ -290,7 +290,7 @@ export function installThemeDiagnostics({selectTheme,resetTheme,prepareImages,pa
     if(startupControl){single.hidden=triple.hidden=noVideoDouble.hidden=true;double.disabled=!preparationReady}
     if(mode==='cold-double'){single.hidden=true;triple.hidden=true}
     const explanation=document.createElement('div')
-    explanation.textContent='圆心固定为视口 (89%,94%)；重置春熙后依次浮梦→澄漪→晴庭，取前1/2/3项，间隔目标200ms。双圆（无视频）改为浮梦→晴庭；普通双圆包含澄漪。实际镜像数与视频就绪状态见JSON。静态场景保留暂停动画，特效继续运行，测量3秒后自动恢复并清理。Trace 可搜索 circle- 标记。'
+    explanation.textContent='圆心固定为视口 (89%,94%)；重置春熙后依次浮梦→澄漪→梦雪，取前1/2/3项，间隔目标200ms。双圆（无视频）改为浮梦→梦雪；普通双圆包含澄漪。实际镜像数与视频就绪状态见JSON。静态场景保留暂停动画，特效继续运行，测量3秒后自动恢复并清理。Trace 可搜索 circle- 标记。'
     panel.append(explanation)
   }
   if(mode==='cold-double'){

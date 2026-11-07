@@ -202,7 +202,7 @@ export function installOverlapDiagnostics({selectTheme,resetTheme,prepareImages,
     button.onclick=async()=>{
       if(running)return
       running=true;buttons.forEach(b=>b.disabled=true);round++
-      const interval=Math.max(0,Math.min(500,Number(gap.value)||0)),choices=settings.sequence==='pair'?[themes[1].id,themes[0].id]:['feihua','shuizhong','huadian','chunxi'],pending=[]
+      const interval=Math.max(0,Math.min(500,Number(gap.value)||0)),choices=settings.sequence==='pair'?[themes[1].id,themes[0].id]:['feihua','shuizhong','mengxue','chunxi'],pending=[]
       push('round-start',{count,interval,sequence:settings.sequence,initialTheme:themes[0].id,choices:Array.from({length:count},(_,i)=>choices[i%choices.length])})
       try{
         await resetTheme(themes[0].id);await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))

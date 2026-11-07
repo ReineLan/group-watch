@@ -6,7 +6,7 @@ import {whenNearViewport} from '../src/shared/lib/nearViewport.js'
 import {playSceneVideo} from '../src/app/ui/background/playback.js'
 
 test('selection responds before decoding and late completion cannot revert it', async () => {
-  let current='huadian'
+  let current='mengxue'
   const waiting=new Map(),commits=[]
   const select=latestSelection(()=>current,id=>new Promise(resolve=>waiting.set(id,resolve)),id=>{current=id;commits.push(id)})
   const first=select('chunxi'),second=select('feihua')
@@ -21,7 +21,7 @@ test('selection responds before decoding and late completion cannot revert it', 
 })
 
 test('a failed full image still selects the thumbnail fallback and later choices work', async () => {
-  let current='huadian'
+  let current='mengxue'
   const select=latestSelection(()=>current,async id=>id!=='chunxi',id=>{current=id})
   await select('chunxi')
   assert.equal(current,'chunxi')

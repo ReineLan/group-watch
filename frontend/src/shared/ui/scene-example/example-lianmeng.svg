@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-label="Example landscape: lianmeng">
+<!-- Original group-watch example artwork; MIT license, see repository LICENSE. -->
+<defs><linearGradient id="sky" x2="0" y2="1"><stop stop-color="#bfe4ee"/><stop offset=".55" stop-color="#e6f3f6"/><stop offset="1" stop-color="#9fd0de"/></linearGradient><radialGradient id="moon" cx=".5" cy=".08" r=".22"><stop stop-color="#ffffff"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/></radialGradient></defs>
+<path fill="url(#sky)" d="M0 0h1600v900H0z"/>
+<path fill="url(#moon)" d="M0 0h1600v900H0z"/>
+<g fill="#8fc3cf" opacity=".55"><path d="M210 0h70v560h-70zM1320 0h70v560h-70z"/></g>
+<path d="M0 560Q400 520 800 560T1600 550V900H0Z" fill="#a9d8e3"/>
+<g fill="none" stroke="#e6a3d6" stroke-width="40" stroke-linecap="round" opacity=".45"><path d="M0 120Q400 260 620 40"/><path d="M1600 160Q1220 300 1010 60"/></g>
+<g fill="#5fae9a" opacity=".8"><ellipse cx="260" cy="760" rx="150" ry="36"/><ellipse cx="1340" cy="720" rx="130" ry="32"/><ellipse cx="820" cy="820" rx="110" ry="26"/></g>
+<g fill="#e889c3"><path d="M200 720q40-120 80 0q-40 30-80 0z"/><path d="M1300 690q36-110 72 0q-36 28-72 0z"/><path d="M1460 800q44-130 88 0q-44 32-88 0z"/></g>
+<g fill="#fff" opacity=".8"><circle cx="520" cy="300" r="3"/><circle cx="1080" cy="260" r="2.5"/><circle cx="700" cy="420" r="2"/><circle cx="960" cy="380" r="2.5"/></g>
+</svg>

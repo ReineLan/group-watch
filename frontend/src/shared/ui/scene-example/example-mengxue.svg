@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-label="Example landscape: mengxue">
+<!-- Original group-watch example artwork; MIT license, see repository LICENSE. -->
+<defs><linearGradient id="sky" x2="0" y2="1"><stop stop-color="#f3eef8"/><stop offset="1" stop-color="#cddcf0"/></linearGradient><linearGradient id="snow" x2="0" y2="1"><stop stop-color="#f7f8fd"/><stop offset="1" stop-color="#dfe6f4"/></linearGradient></defs>
+<path fill="url(#sky)" d="M0 0h1600v900H0z"/>
+<circle cx="1240" cy="190" r="90" fill="#fff6fa" opacity=".8"/>
+<path d="M0 560Q260 420 520 540T1040 500T1600 520V900H0Z" fill="#c3cde6"/>
+<path d="M0 650Q300 560 640 640T1200 610T1600 630V900H0Z" fill="url(#snow)"/>
+<g fill="none" stroke="#5a5f80" stroke-linecap="round" opacity=".55"><path d="M0 120Q260 80 520 150T980 110" stroke-width="10"/><path d="M180 105l-40-50M300 110l30-60M420 135l-30-55M560 150l40-50M720 128l-25-58" stroke-width="5"/></g>
+<g fill="#fdfdff" opacity=".85"><ellipse cx="160" cy="98" rx="70" ry="16"/><ellipse cx="420" cy="132" rx="80" ry="15"/><ellipse cx="700" cy="128" rx="64" ry="13"/></g>
+<path d="M1600 720Q1420 760 1300 900H1600Z M0 790Q160 720 340 800T600 900H0Z" fill="#eef1fa"/>
+<g fill="#fff" opacity=".75"><circle cx="220" cy="300" r="4"/><circle cx="480" cy="410" r="3"/><circle cx="760" cy="260" r="5"/><circle cx="1010" cy="380" r="3"/><circle cx="1330" cy="330" r="4"/><circle cx="1460" cy="470" r="3"/><circle cx="640" cy="520" r="3"/></g>
+</svg>
