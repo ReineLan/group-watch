@@ -1,7 +1,8 @@
 <script setup>
-import {computed,ref,onMounted,onBeforeUnmount} from 'vue'
+import {computed,ref,nextTick,onMounted,onBeforeUnmount} from 'vue'
 import {useWorkspace} from '../../../entities/monitor/model/workspace.js'
 import {whenNearViewport} from '../../../shared/lib/nearViewport.js'
+import {snapshotElement,readAsDataURL} from '../../../shared/lib/domSnapshot.js'
 const props=defineProps({item:Object}),{api}=useWorkspace(),data=ref(null),loading=ref(true),error=ref('')
 const emit=defineEmits(['portrait']),context=ref(null),nearby=ref(false)
 const rows=computed(()=>data.value?.messages||props.item.context.map(m=>({...m,parts:[...(m.text?[{type:'text',text:m.text}]:[]),...(m.media||[]).filter(t=>!['reply','at'].includes(t)).map(t=>({type:'unsupported',text:({image:'图片加载后显示',face:'QQ 表情',record:'语音',video:'视频'}[t]||'附件')}))]})))
@@ -12,6 +13,46 @@ let request,stopObserving
 async function load(){request?.abort();const active=new AbortController();request=active;const timer=setTimeout(()=>active.abort(),35000);loading.value=true;error.value='';try{const value=await api('/api/cases/'+encodeURIComponent(props.item.id)+'/context',undefined,{signal:active.signal});if(request===active){data.value=value;emit('portrait',value.messages?.find(m=>String(m.user_id)===String(props.item.user_id)&&m.avatar)||null)}}catch(e){if(request===active)error.value=e.message}finally{clearTimeout(timer);if(request===active)loading.value=false}}
 onMounted(()=>stopObserving=whenNearViewport(context.value,()=>{nearby.value=true;load()}))
 onBeforeUnmount(()=>{stopObserving?.();request?.abort();request=null})
+function trimContext(chat){
+ const msgs=rows.value,picked=msgs.map((m,i)=>selected(m)?i:-1).filter(i=>i>=0),keep=new Set()
+ if(picked.length){
+  const first=picked[0],last=picked[picked.length-1]
+  for(let i=Math.max(0,first-3);i<=first;i++)keep.add(i)
+  for(let i=last;i<=Math.min(msgs.length-1,last+3);i++)keep.add(i)
+  const middle=picked.slice(1,-1).filter(i=>!keep.has(i))
+  for(const i of middle.slice(0,2))keep.add(i)
+ }else for(let i=Math.max(0,msgs.length-8);i<msgs.length;i++)keep.add(i)
+ const children=[...chat.children],decision=new Map()
+ let index=0
+ for(const node of children)if(node.classList.contains('qq-message'))decision.set(node,keep.has(index++))
+ for(const node of children)if(node.classList.contains('qq-stamp'))decision.set(node,decision.get(node.nextElementSibling)===true)
+ let omitted=0
+ const flush=anchor=>{
+  if(!omitted)return
+  const marker=chat.ownerDocument.createElement('div')
+  marker.style.cssText='text-align:center;font-size:11px;color:var(--subtle);margin:10px 0'
+  marker.textContent='· 省略 '+omitted+' 条消息 ·'
+  chat.insertBefore(marker,anchor);omitted=0
+ }
+ for(const node of children){
+  if(decision.get(node)){flush(node);continue}
+  if(node.classList.contains('qq-message'))omitted++
+  node.remove()
+ }
+ flush(null)
+}
+async function snapshot(){
+ const element=context.value
+ if(!element)return null
+ nearby.value=true
+ if(!data.value)await load()
+ if(error.value)throw new Error(error.value)
+ await nextTick()
+ const blob=await snapshotElement(element,{prepare:chat=>chat.querySelector('.qq-chat')&&trimContext(chat.querySelector('.qq-chat'))})
+ const preview=await readAsDataURL(blob),ext=blob.type==='image/png'?'png':'webp'
+ return {name:'聊天上下文.'+ext,original_name:'聊天上下文.'+ext,type:blob.type,data:preview.split(',')[1],preview}
+}
+defineExpose({snapshot})
 </script>
 <template>
 <section ref="context" class="qq-context" aria-label="聊天上下文">

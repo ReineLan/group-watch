@@ -36,7 +36,9 @@ watch(()=>props.open,open=>{
  dateEdited.value=false;form.event_date=localDate();form.group_id=localStorage.getItem('group-evidence-group')||'';localStorage.removeItem('group-evidence-operator')
  for(const [key,value] of Object.entries(props.record||props.draft||{}))if(fields.includes(key))form[key]=value
  if(form.operator==='原表未记载')form.operator=''
- uploads.value=props.record?.images.map(i=>({...i}))||[];batchText.value='';error.value=''
+ uploads.value=(props.record?.images||props.draft?.images||[]).map(i=>({...i}));batchText.value='';error.value=''
+ const pendingShot=props.draft?.pendingShot,at=session
+ if(pendingShot)Promise.resolve(pendingShot).then(shot=>{if(shot&&at===session&&uploads.value.length<8)uploads.value.push(shot)})
  form.notes=props.record?recordRemarks(props.record):props.draft?.notes||''
  if(props.draft?.autoAnalyze)nextTick(()=>analyzeImages())
  initialDecision=props.record?(props.record.penalty_text||''):'';form.decision_detail=initialDecision

@@ -1,5 +1,9 @@
 import {reactive,ref,shallowRef,watch,onScopeDispose} from 'vue'
 import {localDate,time} from '../../../shared/lib/format.js'
+const chatShots=new Map()
+export const cachedChatShot=id=>chatShots.get(id)
+export const reviveChatShot=shot=>({...shot,preview:'data:'+(shot.type||'image/webp')+';base64,'+shot.data})
+export function cacheChatShot(id,shot){const{preview,...rest}=shot;chatShots.delete(id);chatShots.set(id,rest);while(chatShots.size>2)chatShots.delete(chatShots.keys().next().value)}
 export function caseDraft(c, policies) {
   const own=c.context.filter(m=>m.user_id===c.user_id&&c.evidence.includes(m.message_id))
   return {member_id:c.member_account||String(c.user_id),nickname:null,card:null,group_id:c.group_id,autoAnalyze:true,case_id:c.id,event_date:localDate(),reason:(policies?.[c.rule]?.[0]||c.rule)+'\n'+own.map(m=>`${time(m.time)} · ${m.name}：${m.text||'[无文本]'}`).join('\n').slice(0,6000),notes:'',punishment:''}
