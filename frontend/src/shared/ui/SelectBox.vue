@@ -39,7 +39,7 @@ function onKeydown(event){
 <style scoped>
 .select-box{position:relative;display:flex}
 .select-value{position:absolute;inset:0;width:100%;height:100%;margin:0;padding:0;border:0;opacity:0;pointer-events:none}
-.select-button{display:flex;align-items:center;gap:8px;width:100%;box-sizing:border-box;min-height:42px;padding:11px 12px;border:1px solid var(--line-1);border-radius:6px;background:var(--surface);color:var(--ink);font:inherit;text-align:left;cursor:pointer}
+.select-button{display:flex;align-items:center;gap:8px;width:100%;text-align:left;cursor:pointer}
 .select-button:disabled{cursor:not-allowed;opacity:.5}
 .select-button:focus-visible{outline:none;border-color:var(--line-3);box-shadow:0 0 0 3px color-mix(in srgb,var(--shadow) 6%,transparent)}
 .select-text-wrap{display:grid;flex:1;min-width:0}
@@ -48,8 +48,5 @@ function onKeydown(event){
 .select-button .placeholder{color:var(--faint)}
 .select-button svg{flex:none;width:16px;height:16px;stroke:currentColor;stroke-width:2.4;fill:none;stroke-linecap:round;stroke-linejoin:round;color:var(--subtle);transition:transform .15s}
 .select-box.open .select-button svg{transform:rotate(180deg)}
-.select-list{z-index:30;box-sizing:border-box;width:max-content;list-style:none;margin:0;padding:4px;overflow:auto;border:1px solid var(--line-2);border-radius:10px;background:var(--surface);box-shadow:0 8px 24px color-mix(in srgb,var(--shadow) 12%,transparent)}
-.select-list li{padding:11px 12px;border-radius:7px;font-size:13px;line-height:1.5;color:var(--ink);cursor:pointer;overflow-wrap:anywhere}
-.select-list li.active,.select-list li:active{background:var(--surface-3)}
 .select-list li.disabled{color:var(--faint);cursor:default}
 </style>

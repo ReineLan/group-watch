@@ -38,9 +38,7 @@ function onKeydown(event){
 </template>
 <style scoped>
 .suggest-box{display:block;width:100%}
-.suggest-box input{display:block;width:100%;box-sizing:border-box;min-height:42px;padding:11px 12px;border:1px solid var(--line-1);border-radius:6px;background:var(--surface);color:var(--ink);font:inherit}
-.suggest-list{z-index:30;box-sizing:border-box;width:max-content;list-style:none;margin:0;padding:4px;overflow:auto;border:1px solid var(--line-2);border-radius:10px;background:var(--surface);box-shadow:0 8px 24px color-mix(in srgb,var(--shadow) 12%,transparent)}
-.suggest-list li{display:flex;align-items:baseline;gap:10px;padding:11px 12px;border-radius:7px;font-size:13px;line-height:1.5;color:var(--ink);cursor:pointer;overflow-wrap:anywhere}
-.suggest-list li.active,.suggest-list li:active{background:var(--surface-3)}
+.suggest-box input{display:block;width:100%}
+.suggest-list li{display:flex;align-items:baseline;gap:10px}
 .suggest-list .suggest-value{margin-left:auto;flex:none;font-size:11px;color:var(--subtle)}
 </style>
