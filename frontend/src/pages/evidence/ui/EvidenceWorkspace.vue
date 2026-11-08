@@ -16,10 +16,12 @@ import RecordDetail from './RecordDetail.vue'
 import MemberHistory from './MemberHistory.vue'
 import RuleEditor from './RuleEditor.vue'
 import ArchiveQuery from './ArchiveQuery.vue'
+import SelectBox from '../../../shared/ui/SelectBox.vue'
 const {notify}=useSession()
 const props=defineProps({view:String,active:Boolean}),emit=defineEmits(['saved'])
 const {records,profiles,groups,groupLabel,load,error,loaded,displayName,interacting}=useEvidence()
 const filters=reactive(blankFilters()),page=ref(1),moreFilters=ref(),selected=ref(''),member=ref(''),ruleIndex=ref(null),editing=ref(false),editRecord=ref(null),editDraft=ref(null),batch=ref(false)
+const groupFilterOptions=computed(()=>[{value:'',label:'全部群聊'},...groups.value.map(group=>({value:group,label:groupLabel(group)}))])
 const queryOpen=ref(false)
 const content=ref(null)
 const title=computed(()=>({records:'处罚档案',bans:'禁言跟踪',risks:'黑名单与预警',policies:'处理办法',maintenance:'数据与备份'}[props.view]||'处罚档案'))
@@ -61,25 +63,8 @@ defineExpose({refresh})
 
                 </div><button class="button subtle" id="ev-export" @click="csv"><EvidenceIcon name="download"/>导出 CSV</button>
             </div>
-            <div class="filterbar archive-filterbar"><button v-if="view==='records'" class="archive-query-toggle" type="button" :aria-expanded="queryOpen" aria-controls="archive-query-panel" @click="queryOpen=!queryOpen"><span aria-hidden="true">{{queryOpen?'▾':'▸'}}</span> AI</button><SearchField id="ev-search" v-model="filters.search" placeholder="搜索 QQ 号、昵称或事件经过" label="搜索档案" shortcut/><select
-                    id="ev-group-filter" v-model="filters.group" aria-label="筛选群聊"><option v-for="group in groups" :key="group" :value="group">{{groupLabel(group)}}</option>
-                    <option value="">全部群聊</option>
-                </select><select id="ev-type-filter" v-model="filters.type" aria-label="筛选处罚类型" :hidden="view==='bans'">
-                    <option value="">全部处罚</option>
-                    <option>警告</option>
-                    <option>禁言</option>
-                    <option>移出群聊</option>
-                    <option>其他</option>
-                </select><select id="ev-status-filter" v-model="filters.status" aria-label="禁言状态" :hidden="view!=='bans'">
-                    <option value="">全部状态</option>
-                    <option value="active">当前禁言</option>
-                    <option>进行中</option>
-                    <option>已结束</option>
-                    <option>永久禁言</option>
-                    <option>未注明结束</option>
-                    <option>未开始</option>
-                    <option>待核实</option>
-                </select><button class="button subtle" id="ev-reset" :hidden="!hasFilters" @click="reset">清除筛选</button></div>
+            <div class="filterbar archive-filterbar"><button v-if="view==='records'" class="archive-query-toggle" type="button" :aria-expanded="queryOpen" aria-controls="archive-query-panel" @click="queryOpen=!queryOpen"><span aria-hidden="true">{{queryOpen?'▾':'▸'}}</span> AI</button><SearchField id="ev-search" v-model="filters.search" placeholder="搜索 QQ 号、昵称或事件经过" label="搜索档案" shortcut/><SelectBox
+                    id="ev-group-filter" v-model="filters.group" aria-label="筛选群聊" :options="groupFilterOptions"/><SelectBox id="ev-type-filter" v-model="filters.type" aria-label="筛选处罚类型" :hidden="view==='bans'" :options="[{value:'',label:'全部处罚'},'警告','禁言','移出群聊','其他']"/><SelectBox id="ev-status-filter" v-model="filters.status" aria-label="禁言状态" :hidden="view!=='bans'" :options="[{value:'',label:'全部状态'},{value:'active',label:'当前禁言'},'进行中','已结束','永久禁言','未注明结束','未开始','待核实']"/><button class="button subtle" id="ev-reset" :hidden="!hasFilters" @click="reset">清除筛选</button></div>
 
             <div v-if="extra.length||(filters.start&&filters.end&&filters.start>filters.end)" id="ev-active-filters"><span v-if="filters.start&&filters.end&&filters.start>filters.end" class="range-error">开始日期不能晚于结束日期</span><span v-for="text in extra" :key="text" class="filter-chip">{{text}}</span></div>
             <div v-if="view==='records'" v-show="queryOpen" id="archive-query-panel" class="archive-query"><ArchiveQuery @member="member=$event" @record="selected=$event"/></div>

@@ -3,6 +3,7 @@ import {reactive,ref,computed,watch,nextTick,onMounted,onBeforeUnmount} from 'vu
 import ModalDialog from '../../../shared/ui/ModalDialog.vue'
 import EvidenceIcon from '../../../shared/ui/EvidenceIcon.vue'
 import SuggestBox from '../../../shared/ui/SuggestBox.vue'
+import SelectBox from '../../../shared/ui/SelectBox.vue'
 import {useSession} from '../../../shared/api/session.js'
 import {useEvidence} from '../model/state.js'
 import {buildRecordPayload,recordRemarks} from '../model/records.js'
@@ -13,6 +14,7 @@ const {api,notify}=useSession(),{groups,groupLabel,rules,load}=useEvidence()
 const previewImage=ref(null)
 const form=reactive({}),uploads=ref([]),batchText=ref(''),busy=ref(false),error=ref(''),files=ref(),dragging=ref(false)
 const groupOptions=computed(()=>groups.value)
+const groupSelectOptions=computed(()=>groupOptions.value.map(group=>({value:group,label:groupLabel(group)})))
 const categoryOptions=computed(()=>[...new Set([...rules.value.map(rule=>rule.reason),form.reason].filter(Boolean))])
 const analyzing=ref(false),analysisError=ref(''),aiRows=ref([]),personIndex=ref(0)
 const analysis=computed(()=>aiRows.value[personIndex.value]?.analysis)
@@ -74,7 +76,7 @@ async function save(){
 }
 </script>
 <template>
-        <ModalDialog id="ev-editor" :open="open" label="编辑处罚档案" @close="close">
+        <ModalDialog id="ev-editor" :open="open" label="编辑处罚档案" strict @close="close">
             <form id="ev-record-form" @submit.prevent="save">
                 <div class="modal-header">
                     <div><span class="eyebrow" hidden></span>
@@ -100,15 +102,9 @@ async function save(){
                         <label class="block-label" id="ev-batch-members-label" :hidden="!batch">成员名单 <em>*</em><textarea
                                 id="ev-batch-members" v-model="batchText" :disabled="busy||analyzing" rows="4" placeholder="每行一人：QQ号 昵称（选填）"></textarea><small>最多 50
                                 人，共用本次事件、处理决定与证据。</small></label>
-                        <div class="form-grid"><label>所属群聊 <em>*</em><select name="group_id" v-model="form.group_id" :disabled="busy||analyzing" required><option value="" disabled>请选择群聊</option><option v-for="group in groupOptions" :key="group" :value="group">{{groupLabel(group)}}</option></select></label><label>行为分类 <em>*</em><SuggestBox name="reason" v-model="form.reason" :options="categoryOptions" :disabled="busy||analyzing" maxlength="10000" placeholder="选择或填写具体行为" required/></label></div>
+                        <div class="form-grid"><label>所属群聊 <em>*</em><SelectBox name="group_id" v-model="form.group_id" :options="groupSelectOptions" :disabled="busy||analyzing" placeholder="请选择群聊" required/></label><label>行为分类 <em>*</em><SuggestBox name="reason" v-model="form.reason" :options="categoryOptions" :disabled="busy||analyzing" maxlength="10000" placeholder="选择或填写具体行为" required/></label></div>
                         <div class="form-grid"><label>处理日期 <em>*</em><input name="event_date" v-model="form.event_date" @input="dateEdited=true" :disabled="busy||analyzing" type="date" required></label><label>处理人<input name="operator" v-model="form.operator" :disabled="busy||analyzing" maxlength="100" placeholder="管理员昵称"></label></div>
-                        <div class="form-grid"><label>处罚类型 <em>*</em><select name="punishment" v-model="form.punishment" :disabled="busy||analyzing" required>
-                                    <option value="" disabled>请选择处理决定</option>
-                                    <option>警告</option>
-                                    <option>禁言</option>
-                                    <option>移出群聊</option>
-                                    <option>其他</option>
-                                </select></label><label>时长 / 处理说明<input
+                        <div class="form-grid"><label>处罚类型 <em>*</em><SelectBox name="punishment" v-model="form.punishment" :options="['警告','禁言','移出群聊','其他']" :disabled="busy||analyzing" placeholder="请选择处理决定" required/></label><label>时长 / 处理说明<input
                                     name="decision_detail" v-model="form.decision_detail" :disabled="busy||analyzing" maxlength="1000" placeholder="如：禁言3天、永久"></label></div>
                         <label class="block-label">备注<textarea name="notes" v-model="form.notes" :disabled="busy||analyzing" rows="3" maxlength="10000" placeholder="补充事件详情或处理说明"></textarea></label>
                     </section>
@@ -123,7 +119,7 @@ async function save(){
 
 <style scoped>
 .registration-analysis{margin:18px 0 22px;padding:16px;border:1px solid var(--line-2);border-radius:10px;background:var(--surface-2)}.registration-analysis p{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.8}.registration-analysis .handling-advice{margin-top:10px;color:var(--muted)}
-#ev-record-form .form-grid label,#ev-record-form .block-label{font-size:13px;line-height:20px}#ev-record-form .form-grid input,#ev-record-form .form-grid select,#ev-record-form .form-grid :deep(.suggest-box) input{box-sizing:border-box;height:46px;min-height:46px;margin-top:7px;padding:12px;font-family:inherit;font-size:14px;line-height:20px}
+#ev-record-form .form-grid label,#ev-record-form .block-label{font-size:13px;line-height:20px}#ev-record-form .form-grid input,#ev-record-form .form-grid select,#ev-record-form .form-grid :deep(.suggest-box) input,#ev-record-form .form-grid :deep(.select-box .select-button){box-sizing:border-box;height:46px;min-height:46px;margin-top:7px;padding:12px;font-family:inherit;font-size:14px;line-height:20px}
 #ev-editor-lightbox{width:fit-content;min-width:0;height:fit-content;margin:auto;box-shadow:none;border:0;background:transparent;padding:0;max-width:95vw;max-height:95vh;overflow:visible}#ev-editor-lightbox::backdrop{background:color-mix(in srgb,var(--scrim) 90%,transparent)}#ev-editor-lightbox>img{display:block;margin:auto;width:auto;height:auto;max-width:92vw;max-height:90vh;object-fit:contain}.upload-item img[role=button]{cursor:zoom-in}
 
 .evidence-upload-section{margin-top:0!important;padding-top:0!important}.evidence-upload-section .section-heading{margin-bottom:12px}.evidence-upload-section h3{gap:10px;margin:0!important}.evidence-upload-section .drop-zone{background:linear-gradient(135deg,var(--surface-2),var(--surface-3));border:1px dashed var(--line-3);border-radius:12px;min-height:116px;transition:background .15s,border-color .15s}.evidence-upload-section .drop-zone.dragover{background:var(--surface-3);border-color:var(--accent)}.upload-previews:empty{display:none}.evidence-upload-section .drop-zone{padding:20px;cursor:pointer}.evidence-upload-section .drop-zone.populated{display:block;min-height:0;padding:0;border:0;background:transparent;border-radius:0;cursor:default}.evidence-upload-section .drop-zone.populated.dragover{outline:2px dashed var(--line-3);outline-offset:6px;border-radius:8px}.evidence-upload-section .upload-previews{width:100%;display:grid;grid-template-columns:repeat(auto-fill,minmax(128px,1fr));gap:12px;margin:0}.evidence-upload-section .upload-item{position:relative;width:auto;min-width:0;background:var(--surface-2);border:1px solid var(--line-1);border-radius:10px;overflow:hidden}.evidence-upload-section .upload-item img{width:100%;height:144px;object-fit:contain;display:block;border:0;border-radius:0}.evidence-upload-section .upload-item button{position:absolute;top:6px;right:6px;width:24px;height:24px;padding:0;border-radius:50%;border:1px solid var(--line-1);background:color-mix(in srgb,var(--surface) 95%,transparent);color:var(--ink-2);cursor:pointer;box-shadow:0 1px 4px color-mix(in srgb,var(--shadow) 8%,transparent)}.evidence-upload-section .upload-add{display:grid;place-items:center;height:146px;border:1px dashed var(--line-2);border-radius:10px;background:var(--surface-2);color:var(--subtle);font:300 27px sans-serif;cursor:pointer}.evidence-upload-section .upload-add:hover{background:var(--surface-3);border-color:var(--line-3)}.evidence-upload-section .upload-add:focus-visible{outline:3px solid var(--line-3);outline-offset:3px}.analysis-error{color:var(--danger);font-size:12px;line-height:1.7;margin:10px 0}.analysis-people{margin:20px 0;padding:12px;background:var(--surface-2);border-radius:10px}.analysis-people [role=tablist]{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}.analysis-people [role=tab]{padding:8px 10px;border:1px solid var(--line-2);border-radius:6px;background:var(--surface);color:var(--muted);cursor:pointer}.analysis-people [role=tab].active{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}.analysis-people>.text-link{font-size:11px}@media(max-width:480px){.evidence-upload-section .upload-previews{grid-template-columns:repeat(2,minmax(0,1fr))}.evidence-upload-section .upload-item img{height:128px}.evidence-upload-section .upload-add{height:130px}}

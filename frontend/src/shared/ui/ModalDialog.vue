@@ -1,9 +1,11 @@
 <script setup>
 import {ref,watch,nextTick,onBeforeUnmount} from 'vue'
 import {backdropDismiss} from '../lib/backdrop.js'
-const props=defineProps({open:Boolean,label:String,id:String}),emit=defineEmits(['close'])
+const props=defineProps({open:Boolean,label:String,id:String,strict:Boolean}),emit=defineEmits(['close'])
 const dialog=ref()
 const backdrop=backdropDismiss(()=>dialog.value,()=>emit('close'))
+function blockEscape(event){if(props.strict&&event.key==='Escape')event.preventDefault()}
+watch(dialog,d=>{d?.addEventListener('keydown',blockEscape)})
 watch(()=>props.open,async()=>{await nextTick();if(!dialog.value)return;if(props.open&&!dialog.value.open){dialog.value.showModal();const body=dialog.value.querySelector('.modal-body');if(body)body.scrollTop=0}else if(!props.open&&dialog.value.open)dialog.value.close()},{immediate:true})
 onBeforeUnmount(()=>dialog.value?.close())
 defineExpose({element:dialog})
