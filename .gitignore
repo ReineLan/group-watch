@@ -4,7 +4,6 @@ node_modules/
 runtime/
 .idea/
 .vscode/
-.cache/
 .ssh/
 
 # Credentials
@@ -32,6 +31,7 @@ build/
 
 # cache
 tmp/
+.cache/
 __pycache__/
 .ruff_cache/
 .pytest_cache/

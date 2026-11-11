@@ -30,9 +30,9 @@ function onKeydown(event){
  <button ref="button" type="button" v-bind="$attrs" class="select-button" :disabled="disabled" aria-haspopup="listbox"
   :aria-expanded="open" :aria-controls="listId" :aria-activedescendant="open&&active>=0?listId+'-'+active:undefined"
   @click="toggle" @blur="hide();active=-1" @keydown="onKeydown"><span class="select-text-wrap"><span :class="{placeholder:!current&&!modelValue}">{{display}}</span><span v-for="text in sizers" :key="text" class="select-sizer" aria-hidden="true">{{text}}</span></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5.5 8.5 6.5 7 6.5-7"/></svg></button>
- <Teleport :to="popupTarget"><ul v-if="open" :id="listId" class="select-list" role="listbox" :style="popupStyle" @pointerdown.prevent>
+ <Teleport :to="popupTarget"><ul v-if="open" :id="listId" class="select-list" role="listbox" :style="popupStyle" @mousedown.prevent>
   <li v-for="(item,i) in items" :key="item.value" :id="listId+'-'+i" role="option" :aria-selected="item.value===modelValue" :aria-disabled="item.disabled||undefined"
-   :class="{active:i===active,disabled:item.disabled}" @pointerdown.prevent="pick(item)" @mousedown.prevent="pick(item)">{{item.label}}</li>
+   :class="{active:i===active,disabled:item.disabled}" @click="pick(item)">{{item.label}}</li>
  </ul></Teleport>
 </div>
 </template>

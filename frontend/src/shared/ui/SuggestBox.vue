@@ -30,9 +30,9 @@ function onKeydown(event){
  <input ref="field" v-bind="$attrs" :value="modelValue" :disabled="disabled" role="combobox" aria-autocomplete="list"
   :aria-expanded="open&&filtered.length>0" :aria-controls="listId" :aria-activedescendant="active>=0?listId+'-'+active:undefined"
   autocomplete="off" @input="onInput" @focus="show" @blur="hide();active=-1" @keydown="onKeydown">
- <Teleport :to="popupTarget"><ul v-if="open&&filtered.length" :id="listId" class="suggest-list" role="listbox" :style="popupStyle" @pointerdown.prevent>
+ <Teleport :to="popupTarget"><ul v-if="open&&filtered.length" :id="listId" class="suggest-list" role="listbox" :style="popupStyle" @mousedown.prevent>
   <li v-for="(item,i) in filtered" :key="item.value" :id="listId+'-'+i" role="option" :aria-selected="i===active"
-   :class="{active:i===active}" @pointerdown.prevent="pick(item)" @mousedown.prevent="pick(item)"><span class="suggest-label">{{item.label}}</span><span v-if="item.label!==item.value" class="suggest-value">{{item.value}}</span></li>
+   :class="{active:i===active}" @click="pick(item)"><span class="suggest-label">{{item.label}}</span><span v-if="item.label!==item.value" class="suggest-value">{{item.value}}</span></li>
  </ul></Teleport>
 </div>
 </template>
