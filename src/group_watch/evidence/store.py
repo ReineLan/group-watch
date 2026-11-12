@@ -111,9 +111,11 @@ class RecordStore:
             raise ValueError('请选择已登记的群聊或直播间')
         values['group_id'] = group
         values['member_id'] = normalize_account(values['member_id'])
+        if not values['member_id']:
+            raise ValueError('请填写成员账号；可先填昵称，系统会按群成员自动补全')
         pattern = r'[1-9]\d{4,11}' if group>0 else r'-[1-9]\d{0,18}'
         if not re.fullmatch(pattern,values['member_id']) or abs(int(values['member_id']))>2**63-1:
-            raise ValueError('账号与平台不匹配')
+            raise ValueError('QQ 群成员账号应为 5-12 位数字' if group>0 else '直播间成员账号须为负号开头的 UID（如 -123456）')
         if not values['reason']:
             raise ValueError('请填写行为原因')
         if any(len(v)>10000 for v in values.values() if isinstance(v,str)):

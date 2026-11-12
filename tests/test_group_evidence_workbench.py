@@ -97,6 +97,25 @@ def test_mounted_records_images_rules_and_backup(desk):
     assert client.get('/evidence/api/records').json() == []
 
 
+def test_resolve_member_fills_account_only_for_unique_known_match(desk):
+    client, evidence = desk
+    login(client, evidence)
+    monitor = client.app.state.monitor
+    monitor.directory.members = {100000001: {'12345': {'name': '群名片', 'nickname': '茗夏'},
+                                            '99999': {'name': '同名'}, '88888': {'name': '同名'}}}
+    found = client.post('/api/registration/resolve-member', json={'group_id': 100000001, 'name': '茗夏'})
+    assert found.status_code == 200
+    assert found.json()['member']['member_id'] == '12345'
+    assert client.post('/api/registration/resolve-member', json={'group_id': 100000001, 'name': '同名'}).json()['member'] is None
+    assert client.post('/api/registration/resolve-member', json={'group_id': 100000001, 'name': '不存在'}).json()['member'] is None
+    by_account = client.post('/api/registration/resolve-member', json={'group_id': 100000001, 'account': '12345'})
+    assert by_account.json()['member']['member_id'] == '12345'
+    by_digits_name = client.post('/api/registration/resolve-member', json={'group_id': 100000001, 'name': '12345'})
+    assert by_digits_name.json()['member']['nickname'] == '茗夏'
+    assert client.post('/api/registration/resolve-member', json={'group_id': 777, 'name': '茗夏'}).status_code == 400
+    assert client.post('/api/registration/resolve-member', json={'group_id': 100000001, 'name': ''}).status_code == 400
+
+
 def test_full_backup_download_and_rollback_require_session_and_csrf(desk, monkeypatch, tmp_path):
     import sqlite3
     from group_watch import maintenance

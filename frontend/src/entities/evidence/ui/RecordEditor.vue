@@ -21,8 +21,41 @@ const analysis=computed(()=>aiRows.value[personIndex.value]?.analysis)
 const dateEdited=ref(false)
 let analysisController
 let initialDecision='',session=0
+function resolveGroup(value){
+ const text=String(value??'').trim()
+ if(!text)return ''
+ if(groups.value.includes(text))return text
+ const byName=groups.value.find(id=>groupLabel(id)===text)
+ return byName||(groups.value.length?'':text)
+}
+let resolveTimer,resolveSeq=0
+function queueResolve(){
+ if(!props.open||busy.value)return
+ resolveSeq++
+ clearTimeout(resolveTimer)
+ resolveTimer=setTimeout(async()=>{
+  const seq=resolveSeq,name=String(form.nickname||form.card||'').trim(),account=String(form.member_id||'').trim(),group=String(form.group_id||'').trim()
+  if(!group||(!name&&!account)||(name&&account))return
+  try{
+   const {member}=await api('/api/registration/resolve-member',{group_id:group,name,account})
+   if(member&&props.open&&seq===resolveSeq){
+    if(!String(form.member_id||'').trim())form.member_id=member.member_id
+    if(member.card!=null&&form.card==null)form.card=member.card
+    if(member.nickname!=null&&(form.nickname==null||String(form.nickname).trim()===member.member_id))form.nickname=member.nickname
+   }
+  }catch{/* 自动补全失败仍可手动填写账号 */}
+ },400)
+}
+watch(()=>[form.nickname,form.card,form.group_id,form.member_id],(cur,prev)=>{
+ const text=v=>String(v??'').trim()
+ if(cur.some((v,i)=>!text(v)&&text(prev[i]))&&!cur.some((v,i)=>text(v)&&text(v)!==text(prev[i]))){
+  resolveSeq++;clearTimeout(resolveTimer);return // 纯删除：取消待发解析，不回填
+ }
+ queueResolve()
+})
+watch(()=>groups.value.length,()=>{if(props.open)form.group_id=resolveGroup(form.group_id)})
 onMounted(()=>document.addEventListener('paste',pasteImages))
-onBeforeUnmount(()=>{session++;analysisController?.abort();document.removeEventListener('paste',pasteImages)})
+onBeforeUnmount(()=>{session++;resolveSeq++;clearTimeout(resolveTimer);analysisController?.abort();document.removeEventListener('paste',pasteImages)})
 function pasteImages(event){
  if(!props.open||previewImage.value||busy.value||analyzing.value)return
  const items=[...(event.clipboardData?.items||[])].filter(item=>item.kind==='file'&&item.type.startsWith('image/')).map(item=>item.getAsFile()).filter(Boolean)
@@ -36,8 +69,9 @@ watch(()=>props.open,open=>{
  previewImage.value=null;session++;analysisController?.abort();analyzing.value=false;aiRows.value=[];personIndex.value=0;analysisError.value=''
  if(!open)return
  for(const key of fields)form[key]=['nickname','card'].includes(key)?null:''
- dateEdited.value=false;form.event_date=localDate();form.group_id=localStorage.getItem('group-evidence-group')||'';localStorage.removeItem('group-evidence-operator')
+ dateEdited.value=false;form.event_date=localDate();form.group_id=resolveGroup(localStorage.getItem('group-evidence-group'));localStorage.removeItem('group-evidence-operator')
  for(const [key,value] of Object.entries(props.record||props.draft||{}))if(fields.includes(key))form[key]=value
+ form.group_id=resolveGroup(form.group_id)
  if(form.operator==='原表未记载')form.operator=''
  uploads.value=(props.record?.images||props.draft?.images||[]).map(i=>({...i}));batchText.value='';error.value=''
  const pendingShot=props.draft?.pendingShot,at=session
