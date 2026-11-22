@@ -38,11 +38,15 @@ class Maintenance:
         self.state_file = self.folder / 'state.json'
         self.state = {}
         self.last_activity = time.time()
-        self.draining = False
+        self.drain_until = 0
         self.task = None
         self.busy = False
         self.backup_task = None
         self._backup_lock = threading.Lock()
+
+    @property
+    def draining(self):
+        return time.monotonic() < self.drain_until
 
     def save_state(self):
         self.folder.mkdir(parents=True, exist_ok=True)

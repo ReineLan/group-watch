@@ -1,5 +1,6 @@
 from group_watch.evidence.routes import json_body
 from group_watch.evidence.registration import analyze, RegistrationUnavailable, recommend_decisions
+from group_watch.sources.registry import positive_id
 
 from fastapi import HTTPException, Request
 import asyncio
@@ -15,8 +16,6 @@ def install(app, monitor, evidence):
             body = await json_body(request)
             name = str(body.get('name') or '').strip()[:100]
             typed = str(body.get('account') or '').strip()
-            account = typed if re.fullmatch(r'[1-9]\d{4,11}', typed) else \
-                      name if re.fullmatch(r'[1-9]\d{4,11}', name) else ''
             if isinstance(body.get('group_id'), bool):
                 raise ValueError('群聊标识无效')
             try:
@@ -25,6 +24,17 @@ def install(app, monitor, evidence):
                 raise ValueError('群聊标识无效')
             if not group or group not in monitor.directory.group_ids:
                 raise ValueError('请选择已登记的群聊或直播间')
+            account = ''
+            for value in (typed, name):
+                if group > 0 and re.fullmatch(r'[1-9]\d{4,11}', value):
+                    account = value
+                    break
+                if group < 0:
+                    try:
+                        account = str(-positive_id(value.removeprefix('-')))
+                    except ValueError:
+                        continue
+                    break
             if not name and not account:
                 raise ValueError('昵称无效')
             query = account or name

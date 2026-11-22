@@ -16,13 +16,14 @@ def load_tool():
 
 @pytest.mark.parametrize('apply', [False, True])
 @pytest.mark.parametrize('changed,fail', [('frontend/src/app/App.vue', False), ('tools/build_support.py', False), ('frontend/src/app/App.vue', True)])
-def test_rebuild_updates_are_built_then_applied(tmp_path, monkeypatch, apply, changed, fail):
+def test_rebuild_updates_are_built_then_applied(tmp_path, monkeypatch, capsys, apply, changed, fail):
     tool = load_tool()
     config = tmp_path / 'config.json'
     config.write_text(json.dumps({'automatic_updates': True}), encoding='utf-8')
     monkeypatch.setattr(tool, 'ROOT', tmp_path)
     monkeypatch.setattr(tool, 'STATE', tmp_path / 'update.json')
     tool.write('准备更新', before='a', target='b')
+    capsys.readouterr()
     monkeypatch.setattr('sys.argv', ['update', '--config', str(config)] + (['--apply'] if apply else []))
     calls, builds = [], []
 
@@ -51,6 +52,7 @@ def test_rebuild_updates_are_built_then_applied(tmp_path, monkeypatch, apply, ch
     monkeypatch.setattr(tool, 'maintain', maintain)
     tool.main()
     state = json.loads(tool.STATE.read_text(encoding='utf-8'))
+    assert json.loads(capsys.readouterr().out) == state
     if apply:
         assert state['status'] == '已自动更新' and not builds
         assert any(args[:2] == ('merge', '--ff-only') for args in calls)
@@ -61,7 +63,8 @@ def test_rebuild_updates_are_built_then_applied(tmp_path, monkeypatch, apply, ch
         assert any(args[:2] == ('merge', '--ff-only') for args in calls)
 
 
-def test_failed_build_retries_next_check(tmp_path, monkeypatch):
+@pytest.mark.parametrize('upstream', ['a', 'b'])
+def test_failed_build_retries_next_check(tmp_path, monkeypatch, upstream):
     tool = load_tool()
     config = tmp_path / 'config.json'
     config.write_text(json.dumps({'automatic_updates': True}), encoding='utf-8')
@@ -76,8 +79,12 @@ def test_failed_build_retries_next_check(tmp_path, monkeypatch):
             return str(tmp_path)
         if args == ('status', '--porcelain') or args[0] == 'fetch':
             return ''
-        if args == ('rev-parse', 'HEAD') or args == ('rev-parse', '@{upstream}'):
+        if args == ('rev-parse', 'HEAD') or args[0] == 'merge-base':
             return 'a'
+        if args == ('rev-parse', '@{upstream}'):
+            return upstream
+        if args[0] in ('diff', 'merge'):
+            return ''
         if args == ('rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'):
             return 'origin/main'
         pytest.fail(f'Unexpected Git operation: {args}')
@@ -87,4 +94,32 @@ def test_failed_build_retries_next_check(tmp_path, monkeypatch):
     tool.main()
     state = json.loads(tool.STATE.read_text(encoding='utf-8'))
     assert state['status'] == '准备更新' and state['ready'] is True
+    assert state['target'] == upstream
     assert builds == [['frontend/src/app/App.vue']]
+
+
+def test_ready_plan_without_before_uses_current_head(tmp_path, monkeypatch, capsys):
+    tool = load_tool()
+    config = tmp_path / 'config.json'
+    config.write_text('{}', encoding='utf-8')
+    monkeypatch.setattr(tool, 'ROOT', tmp_path)
+    monkeypatch.setattr(tool, 'STATE', tmp_path / 'update.json')
+    tool.write('准备更新', target='a')
+    capsys.readouterr()
+
+    def git(*args, **kwargs):
+        return {
+            ('rev-parse', '--show-toplevel'): str(tmp_path),
+            ('status', '--porcelain'): '',
+            ('rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'): 'origin/main',
+            ('fetch', '--no-tags', 'origin'): '',
+            ('rev-parse', 'HEAD'): 'a',
+            ('rev-parse', '@{upstream}'): 'a',
+        }[args]
+
+    monkeypatch.setattr(tool, 'git', git)
+    monkeypatch.setattr('sys.argv', ['update', '--config', str(config)])
+    tool.main()
+    state = json.loads(capsys.readouterr().out)
+    assert state['ready'] is True
+    assert state['before'] == state['target'] == 'a'

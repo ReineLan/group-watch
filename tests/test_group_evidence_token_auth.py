@@ -81,7 +81,7 @@ def test_shutdown_rejects_busy_work_and_accepts_drained_instance(client):
     maintenance.busy=True
     assert client.post('/api/maintenance/shutdown').status_code==409
     maintenance.busy=False
-    maintenance.draining=True
+    maintenance.drain_until=time.monotonic()+10
     assert client.post('/api/maintenance/shutdown').status_code==200
 
 
@@ -110,6 +110,19 @@ def test_update_waits_for_pending_review_and_allows_retry(client):
     candidates.clear()
     assert client.post('/api/maintenance/drain').status_code == 200
     assert client.post('/api/maintenance/restart').status_code == 200
+
+
+def test_abandoned_update_drain_expires(client):
+    app = client.app
+    maintenance = app.state.maintenance
+    maintenance.last_activity = time.time() - 121
+    client.headers['x-csrf-token'] = client.get('/api/maintenance/update-token').json()['token']
+    assert client.post('/api/maintenance/drain').status_code == 200
+    assert 0 < maintenance.drain_until - time.monotonic() <= 10
+    assert client.post('/api/auth/login', json={'token': TOKEN}).status_code == 503
+    maintenance.drain_until = time.monotonic() - 1
+    assert client.post('/api/maintenance/restart').status_code == 409
+    assert client.post('/api/auth/login', json={'token': TOKEN}).status_code == 200
 
 
 def test_chinese_password_and_expired_session(client):

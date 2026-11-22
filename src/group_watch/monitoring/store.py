@@ -16,6 +16,7 @@ def dumps(value):
 
 class Store:
     def __init__(self, path):
+        self.path = path
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         self.db = connect(path, check_same_thread=False)
         self.db.executescript('''

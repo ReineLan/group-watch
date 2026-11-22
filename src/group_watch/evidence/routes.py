@@ -1,5 +1,6 @@
 """Archive endpoints on the shared FastAPI application; storage is injected per app."""
 from group_watch.evidence.domain import decorate_records, suggestion
+import asyncio
 import binascii
 import json
 import re
@@ -27,6 +28,7 @@ async def json_body(request):
 
 def create_router(store, feedback=None):
     router = APIRouter(prefix='/evidence')
+    record_writes = asyncio.Lock()
 
     @router.get('/api/records')
     def records():
@@ -72,19 +74,24 @@ def create_router(store, feedback=None):
         try:
             body = await json_body(request)
             if operation in ('records', 'batch'):
-                result = await run_in_threadpool(store.save_records, body, operation == 'batch')
-                if feedback:
-                    ids = result.get('ids', [result.get('id')])
-                    submitted = body.get('records', [body])
-                    notes = {key:str(row.get('notes', ''))[:2000] for key,row in zip(ids, submitted)}
-                    for row in await run_in_threadpool(store.get_records):
-                        if row['id'] in ids:
-                            feedback.record(row, notes.get(row['id'], ''))
+                async with record_writes:
+                    result = await run_in_threadpool(store.save_records, body, operation == 'batch')
+                    if feedback:
+                        ids = set(result['ids'])
+                        for row in await run_in_threadpool(store.get_records):
+                            if row['id'] in ids:
+                                feedback.record(row, row['notes'][:2000])
                 return result
             if operation == 'rules':
                 return await run_in_threadpool(store.save_rules, body)
             if operation == 'rollback':
-                return await run_in_threadpool(store.rollback, body.get('backup'))
+                async with record_writes:
+                    before = await run_in_threadpool(store.get_records) if feedback else []
+                    result = await run_in_threadpool(store.rollback, body.get('backup'))
+                    if feedback:
+                        after = await run_in_threadpool(store.get_records)
+                        await feedback.restore_records(before, after)
+                    return result
             if operation == 'suggest':
                 candidate = {key:body.get(key,'') for key in ('id','member_id','group_id','reason')}
                 return await run_in_threadpool(lambda:suggestion(store.get_records(), store.get_rules(), candidate))
@@ -100,9 +107,10 @@ def create_router(store, feedback=None):
         from starlette.concurrency import run_in_threadpool
         try:
             await json_body(request)
-            result = await run_in_threadpool(store.delete_record, record_id)
-            if result and feedback:
-                feedback.remove('record:'+record_id)
+            async with record_writes:
+                result = await run_in_threadpool(store.delete_record, record_id)
+                if result and feedback:
+                    feedback.remove('record:'+record_id)
             return result or JSONResponse({'error':'记录不存在'}, status_code=404)
         except (ValueError, TypeError) as exc:
             return JSONResponse({'error':str(exc)}, status_code=400)

@@ -33,14 +33,15 @@ def git(*args, retries=0):
     raise RuntimeError('Git 检查未完成')
 
 
-def write(status, detail='', **extra):
+def write(status, detail='', *, emit=True, **extra):
     value = dict(status=status, detail=detail, ready=status == '准备更新', checked=time.time(), **extra)
     STATE.parent.mkdir(parents=True, exist_ok=True)
     part = STATE.with_suffix('.part')
     part.write_text(json.dumps(value, ensure_ascii=False), 'utf-8')
     part.replace(STATE)
     # Keep the native stdout protocol safe across Windows console code pages.
-    print(json.dumps(value, ensure_ascii=True))
+    if emit:
+        print(json.dumps(value, ensure_ascii=True))
 
 
 def read_state():
@@ -52,7 +53,8 @@ def read_state():
 
 def step(command, timeout):
     try:
-        return subprocess.run(command, cwd=ROOT, env=MAINT_ENV, timeout=timeout).returncode
+        return subprocess.run(command, cwd=ROOT, env=MAINT_ENV, timeout=timeout,
+                              stdout=subprocess.DEVNULL).returncode
     except subprocess.TimeoutExpired:
         return 124
 
@@ -100,29 +102,33 @@ def main():
             return write('跳过：未配置 origin 上游')
         git('fetch', '--no-tags', 'origin', retries=1)
         before, target = git('rev-parse', 'HEAD'), git('rev-parse', '@{upstream}')
+        state = read_state()
+        retry_build = (state.get('status') in ('构建中', '构建失败')
+                       and state.get('target') in (None, before))
+        pending_paths = (state.get('changed') or list(MAINTENANCE_PATHS)) if retry_build else []
         if before == target:
             # A supervisor restart may have lost the drain/apply step; re-arm or rebuild as needed.
-            state = read_state()
             if state.get('status') == '准备更新' and state.get('target') == target:
-                return write('准备更新', before=state['before'], target=target)
-            if state.get('status') in ('构建中', '构建失败'):
-                changed = state.get('changed') or list(MAINTENANCE_PATHS)
-                error = maintain(changed)
-                if error:
-                    return write('构建失败', error, changed=changed)
-                return write('准备更新', before=state.get('before', before), target=target, changed=changed)
-            return write('已是最新版本')
-        if git('merge-base', 'HEAD', target) != before:
-            return write('跳过：分支无法快进')
-        changed = git('diff', '--name-only', before, target, '--', *MAINTENANCE_PATHS).splitlines()
+                return write('准备更新', before=state.get('before', before), target=target, changed=state.get('changed', []))
+            if not pending_paths:
+                return write('已是最新版本')
+            changed = pending_paths
+        else:
+            if git('merge-base', 'HEAD', target) != before:
+                return write('跳过：分支无法快进')
+            changed = git('diff', '--name-only', before, target, '--', *MAINTENANCE_PATHS).splitlines()
+            changed = list(dict.fromkeys(pending_paths + changed))
         if changed:
             # Build before signalling readiness: a failed build never takes the site down.
-            git('merge', '--ff-only', target)
-            write('构建中', changed=changed)
+            if before != target:
+                git('merge', '--ff-only', target)
+            before = state.get('before', before) if retry_build else before
+            plan = dict(before=before, target=target, changed=changed)
+            write('构建中', emit=False, **plan)
             error = maintain(changed)
             if error:
-                return write('构建失败', error, changed=changed)
-            return write('准备更新', before=before, target=target, changed=changed)
+                return write('构建失败', error, **plan)
+            return write('准备更新', **plan)
         write('准备更新', before=before, target=target)
     except (OSError, ValueError, KeyError, RuntimeError, subprocess.SubprocessError):
         write('更新检查失败', '检查 Git 上游配置或网络；服务继续使用当前版本。')

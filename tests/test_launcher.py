@@ -15,13 +15,15 @@ from group_watch.launcher import process_lock
 from group_watch.maintenance import Maintenance
 
 
-@pytest.mark.parametrize('snow_ports', [(True,), (False, False), (False, True)])
-def test_serve_reuses_external_snowluma_and_only_closes_owned_children(tmp_path, monkeypatch, snow_ports):
+@pytest.mark.parametrize('snow_ports, external_snowluma', [
+    ((True,), False), ((False, False), False), ((False, True), False), ((), True),
+])
+def test_serve_reuses_external_snowluma_and_only_closes_owned_children(tmp_path, monkeypatch, snow_ports, external_snowluma):
     from group_watch import launcher
 
     snow_root = tmp_path/'runtime/snowluma'
     snow_root.mkdir(parents=True)
-    if not snow_ports[0]:
+    if snow_ports and not snow_ports[0]:
         for name in ('node.exe', 'node', 'index.mjs'):
             (snow_root/name).touch()
     monkeypatch.setattr(launcher, 'ROOT', tmp_path)
@@ -50,12 +52,12 @@ def test_serve_reuses_external_snowluma_and_only_closes_owned_children(tmp_path,
         raise KeyboardInterrupt
     monkeypatch.setattr(launcher.time, 'sleep', interrupt)
 
-    launcher.serve(tmp_path/'config.json', 8066)
+    launcher.serve(tmp_path/'config.json', 8066, external_snowluma=external_snowluma)
 
     expected = ['SnowLuma', 'Web'] if snow_ports == (False, False) else ['Web']
     assert started == expected
     assert sorted(closed) == sorted(expected)
-    assert len(checks) == (0 if snow_ports[0] else 1)
+    assert len(checks) == (1 if snow_ports and not snow_ports[0] else 0)
     assert not launcher.STATE.exists()
 
 
@@ -131,7 +133,8 @@ def test_supervisor_controls_require_matching_instance(tmp_path, monkeypatch, ma
     client = httpx.Client
     monkeypatch.setattr(launcher.httpx, 'Client',
                         lambda **kwargs: client(transport=httpx.MockTransport(handle), **kwargs))
-    monkeypatch.setattr(launcher.subprocess, 'run', lambda *_args, **_kwargs: SimpleNamespace(stdout='{"ready":true}'))
+    monkeypatch.setattr(launcher.subprocess, 'run',
+                        lambda *_args, **_kwargs: SimpleNamespace(returncode=0, stdout='{"ready":true}'))
 
     assert launcher.graceful_web(8066, 'ours') is matches
     assert launcher.update(8066, tmp_path/'config.json', 'ours') is matches

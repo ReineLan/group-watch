@@ -40,7 +40,9 @@ def main(argv=None):
         sub = commands.add_parser(command, help=help_text)
         sub.add_argument('--config', type=Path, default=ROOT/'config/config.json')
         sub.add_argument('--port', type=int, default=8066)
-        if command=='serve': sub.add_argument('--background', '-b', action='store_true', help='在后台运行')
+        if command=='serve':
+            sub.add_argument('--background', '-b', action='store_true', help='在后台运行')
+            sub.add_argument('--external-snowluma', action='store_true', help='由外部服务管理 SnowLuma')
     commands.add_parser('stop', help='安全停止本项目拥有的服务进程')
     commands._choices_actions = [choice for choice in commands._choices_actions if choice.dest != '_worker']
     args = parser.parse_args(argv)
@@ -49,7 +51,8 @@ def main(argv=None):
         if args.command=='stop': return launcher.stop()
         config = resolve_path(args.config, base=Path.cwd())
         if args.command in ('_worker', 'web'): return worker(config,args.port)
-        return launcher.background(config,args.port) if args.background else launcher.serve(config,args.port)
+        launch = launcher.background if args.background else launcher.serve
+        return launch(config, args.port, external_snowluma=args.external_snowluma)
     except (RuntimeError, OSError, ValueError) as exc:
         parser.exit(1, str(exc)+'\n')
 

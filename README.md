@@ -39,6 +39,8 @@ uv run lan serve
 
 SnowLuma 控制台默认位于 `127.0.0.1:5099`，仅启动 Web 使用 `uv run lan web`。
 
+SnowLuma 由 Docker 等外部服务管理时，可使用 `uv run lan serve --external-snowluma` 运行 Web 守护进程。`deploy/systemd/group-watch.service` 使用该模式，开启 `automatic_updates` 需要服务账号能写入部署目录和拉取 Git 上游。本机健康检查可访问 `http://127.0.0.1:8066/api/auth/session`。
+
 ## 项目结构与文档
 
 技术栈：

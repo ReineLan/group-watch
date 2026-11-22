@@ -92,7 +92,7 @@ def stop():
     raise RuntimeError('停止尚未完成，请查看日志；未强杀未确认的进程')
 
 
-def background(config, port):
+def background(config, port, *, external_snowluma=False):
     config_path = str(config.resolve())
     state = read_state()
     if state:
@@ -103,7 +103,10 @@ def background(config, port):
     if occupied(port):
         raise RuntimeError(f'端口 {port} 已被占用，请先停止旧服务')
     flags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP if os.name == 'nt' else 0
-    process = subprocess.Popen([sys.executable, '-m', 'group_watch', 'serve', '--config', str(config), '--port', str(port)],
+    command = [sys.executable, '-m', 'group_watch', 'serve', '--config', str(config), '--port', str(port)]
+    if external_snowluma:
+        command.append('--external-snowluma')
+    process = subprocess.Popen(command,
         cwd=ROOT, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         creationflags=flags, start_new_session=os.name!='nt')
     with httpx.Client(base_url=f'http://127.0.0.1:{port}', timeout=1, trust_env=False) as client:
@@ -198,7 +201,7 @@ def update(port, config, instance):
     try:
         # The check may run dependency installs and a frontend build before reporting ready.
         result = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, encoding='utf-8', timeout=900)
-        if not json.loads(result.stdout).get('ready'):
+        if result.returncode or not json.loads(result.stdout).get('ready'):
             return False
         with httpx.Client(base_url=f'http://127.0.0.1:{port}', trust_env=False, timeout=3) as client:
             token = supervisor_token(client, instance)
@@ -213,13 +216,13 @@ def update(port, config, instance):
         return False
 
 
-def serve(config, port):
+def serve(config, port, *, external_snowluma=False):
     configure(LOGS)
     cfg = load_settings(config)
     with process_lock(Path(cfg.db_path).with_suffix('.supervisor.lock')):
         if occupied(port):
             raise RuntimeError('Web 端口已被占用，请先停止旧版实例')
-        external_snow = occupied(3001)
+        external_snow = external_snowluma or occupied(3001)
         snow_root = ROOT/'runtime/snowluma'
         node = snow_root/('node.exe' if os.name=='nt' else 'node')
         if not external_snow:
@@ -228,6 +231,8 @@ def serve(config, port):
             check = subprocess.run([str(node), str(snow_root/'check-node-version.cjs')], capture_output=True, timeout=20)
             if check.returncode:
                 raise RuntimeError('SnowLuma Node 版本检查失败')
+        elif external_snowluma:
+            logger.info('SnowLuma 由外部服务管理；本守护只启动工作台')
         else:
             logger.info('复用 3001 端口上的 SnowLuma；本守护不负责启动或停止它')
         instance = uuid.uuid4().hex

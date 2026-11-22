@@ -116,6 +116,73 @@ def test_resolve_member_fills_account_only_for_unique_known_match(desk):
     assert client.post('/api/registration/resolve-member', json={'group_id': 100000001, 'name': ''}).status_code == 400
 
 
+@pytest.mark.parametrize('lookup', [
+    {'account': '-123'},
+    {'account': '123'},
+    {'name': '-123'},
+    {'account': '9223372036854775808', 'name': '直播间成员'},
+    {'account': '-9223372036854775808', 'name': '-123'},
+])
+def test_resolve_bilibili_uid_keeps_negative_sign(desk, lookup):
+    client, evidence = desk
+    login(client, evidence)
+    monitor = client.app.state.monitor
+    monitor.cfg.live_rooms[456] = '测试直播间'
+    monitor.directory.live_members[(-456, -123)] = {'sender': {'nickname': '直播间成员'}}
+
+    found = client.post('/api/registration/resolve-member', json={'group_id': -456, **lookup})
+    assert found.status_code == 200, found.text
+    assert found.json()['member']['member_id'] == '-123'
+    assert found.json()['member']['nickname'] == '直播间成员'
+
+
+@pytest.mark.parametrize('human_reviewed', [False, True])
+def test_rollback_reconciles_only_record_feedback(desk, human_reviewed):
+    client, evidence = desk
+    login(client, evidence)
+    feedback = client.app.state.monitor.feedback
+    body = dict(group_id=100000001, event_date='2026-10-26', reason='快照原因', punishment='警告',
+                member_id='123456', notes='快照备注')
+    saved = client.post('/evidence/api/records', json=body)
+    assert saved.status_code == 200, saved.text
+    first_id = saved.json()['id']
+    deleted = client.post('/evidence/api/records', json=body | {'member_id': '123457'})
+    assert deleted.status_code == 200, deleted.text
+    deleted_id = deleted.json()['id']
+    snapshot = evidence.backup()
+
+    edited = client.post('/evidence/api/records', json=body | {'id': first_id, 'reason': '编辑原因', 'notes': '编辑备注'})
+    assert edited.status_code == 200, edited.text
+    first_source = 'record:'+first_id
+    if human_reviewed:
+        feedback.put(first_source, '编辑原因', 'violation', '待确认反馈')
+        feedback.edit(first_source, '编辑原因', 'clear', '人工确认的记录反馈')
+    assert client.request('DELETE', '/evidence/api/records/'+deleted_id, json={}).status_code == 200
+    added = client.post('/evidence/api/records', json=body | {'member_id': '123458', 'reason': '新增原因'})
+    assert added.status_code == 200, added.text
+    added_source = 'record:'+added.json()['id']
+    feedback.put(added_source, '新增原因', 'violation', '新增反馈')
+    manual_source = feedback.edit(None, '人工确认', 'clear', '人工反馈')
+
+    result = client.post('/evidence/api/rollback', json={'backup': snapshot.name})
+    assert result.status_code == 200, result.text
+    assert {row['id'] for row in evidence.get_records()} == {first_id, deleted_id}
+    points = {row['source']: row for row in feedback.points()}
+    jobs = feedback.store.db.execute('SELECT source, rule, payload FROM feedback_jobs').fetchall()
+    expected_jobs = {'record:'+deleted_id}
+    expected_points = {manual_source}
+    if human_reviewed:
+        expected_points.add(first_source)
+        assert points[first_source]['edited'] == 1
+        assert points[first_source]['verdict'] == 'clear'
+        assert points[first_source]['summary'] == '人工确认的记录反馈'
+    else:
+        expected_jobs.add(first_source)
+    assert points.keys() == expected_points
+    assert {row['source'] for row in jobs} == expected_jobs
+    assert all(row['rule'] == '快照原因' and json.loads(row['payload'])['note'] == '快照备注' for row in jobs)
+
+
 def test_full_backup_download_and_rollback_require_session_and_csrf(desk, monkeypatch, tmp_path):
     import sqlite3
     from group_watch import maintenance

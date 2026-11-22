@@ -10,7 +10,7 @@ Type=simple
 User=group-watch
 Group=group-watch
 WorkingDirectory=/srv/group-watch
-ExecStart=/srv/group-watch/.venv/bin/python -m group_watch web --config config/config.json --port 8066
+ExecStart=/srv/group-watch/.venv/bin/lan serve --external-snowluma --config config/config.json --port 8066
 Environment=PYTHONUNBUFFERED=1
 Environment=TZ=Asia/Shanghai
 Restart=always
@@ -21,7 +21,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectHome=true
 ProtectSystem=strict
-ReadWritePaths=/srv/group-watch/config /srv/group-watch/data /srv/group-watch/logs
+ReadWritePaths=/srv/group-watch
 
 [Install]
 WantedBy=multi-user.target

@@ -38,7 +38,7 @@ def install(app, maintenance, queries, csrf, store):
             raise HTTPException(409, '工作台正在使用，稍后更新')
         if store.counts()['pending']:
             raise HTTPException(409, '还有候选等待复核，稍后更新')
-        maintenance.draining = True
+        maintenance.drain_until = time.monotonic() + 10
         return {'ok': True}
 
 
@@ -51,14 +51,14 @@ def install(app, maintenance, queries, csrf, store):
     @app.post('/api/maintenance/restart')
     async def restart():
         if not maintenance.draining or queries.active or maintenance.busy:
-            maintenance.draining = False
+            maintenance.drain_until = 0
             raise HTTPException(409, '尚未进入更新状态')
         if store.counts()['pending']:
-            maintenance.draining = False
+            maintenance.drain_until = 0
             raise HTTPException(409, '还有候选等待复核，稍后更新')
         callback = getattr(app.state, 'shutdown', None)
         if callback is None:
-            maintenance.draining = False
+            maintenance.drain_until = 0
             raise HTTPException(409, '当前启动方式不支持自动重启')
         asyncio.get_running_loop().call_later(.5, callback)
         return {'ok': True}
@@ -71,6 +71,6 @@ def install(app, maintenance, queries, csrf, store):
         callback = getattr(app.state, 'shutdown', None)
         if callback is None:
             raise HTTPException(409, '当前启动方式不支持关闭')
-        maintenance.draining = True
+        maintenance.drain_until = float('inf')
         asyncio.get_running_loop().call_later(.5, callback)
         return {'ok':True}

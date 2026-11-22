@@ -1,5 +1,6 @@
 """Bounded human guidance. No model-generated verdict is promoted to a rule."""
 from group_watch.ds.client import audited_post
+from group_watch.utils.sqlite import connect
 import json
 from contextlib import nullcontext
 import re
@@ -7,6 +8,7 @@ import time
 import uuid
 
 import httpx
+from starlette.concurrency import run_in_threadpool
 
 MAX_EXAMPLES = 160
 MAX_CONTEXT = 3600
@@ -27,14 +29,17 @@ class Feedback:
         self.on_queue = on_queue
 
     def put(self, source, rule, verdict, summary):
+        with self.store.db:
+            self._put(source, rule, verdict, summary)
+
+    def _put(self, source, rule, verdict, summary):
         summary = compact(summary, 480)
         if not summary:
-            self.discard_auto(source)
+            self._discard_auto(self.store.db, source)
             return
-        with self.store.db:
-            self.store.db.execute('INSERT INTO moderation_feedback VALUES(?,?,?,?,?,0) ON CONFLICT(source) DO UPDATE SET rule=excluded.rule,verdict=excluded.verdict,summary=excluded.summary,updated=excluded.updated WHERE moderation_feedback.edited=0',
-                                  (source, rule[:80], verdict, summary, time.time()))
-            self._prune()
+        self.store.db.execute('INSERT INTO moderation_feedback VALUES(?,?,?,?,?,0) ON CONFLICT(source) DO UPDATE SET rule=excluded.rule,verdict=excluded.verdict,summary=excluded.summary,updated=excluded.updated WHERE moderation_feedback.edited=0',
+                              (source, rule[:80], verdict, summary, time.time()))
+        self._prune()
 
     def _prune(self):
         seen = set()
@@ -56,20 +61,24 @@ class Feedback:
                 result.append(dict(row)); seen.add(key)
         return result
 
-    def discard_auto(self, source, cancel=True):
+    def discard_auto(self, source):
         with self.store.db:
-            self.store.db.execute('DELETE FROM moderation_feedback WHERE source=? AND edited=0', (source,))
-            if cancel:
-                self.store.db.execute('DELETE FROM feedback_jobs WHERE source=?',(source,))
+            self._discard_auto(self.store.db, source)
+
+    @staticmethod
+    def _discard_auto(db, source):
+        db.execute('DELETE FROM moderation_feedback WHERE source=? AND edited=0', (source,))
+        db.execute('DELETE FROM feedback_jobs WHERE source=?', (source,))
 
     def edit(self, source, rule, verdict, summary):
         summary = compact(summary,480)
         if not summary or verdict not in ('clear','violation'):
             raise ValueError('请填写判断摘要，并选择算违规或不算违规')
         source = source or 'manual:'+uuid.uuid4().hex
-        if not source.startswith('manual:') and not self.store.db.execute('SELECT 1 FROM moderation_feedback WHERE source=?',(source,)).fetchone():
-            raise ValueError('此条摘要已失效，请刷新后重试')
         with self.store.db:
+            self.store.db.execute('BEGIN IMMEDIATE')
+            if not source.startswith('manual:') and not self.store.db.execute('SELECT 1 FROM moderation_feedback WHERE source=?',(source,)).fetchone():
+                raise ValueError('此条摘要已失效，请刷新后重试')
             self.store.db.execute('INSERT INTO moderation_feedback VALUES(?,?,?,?,?,1) ON CONFLICT(source) DO UPDATE SET rule=excluded.rule,verdict=excluded.verdict,summary=excluded.summary,updated=excluded.updated,edited=1',
                                   (source,compact(rule,80),verdict,summary,time.time()))
             self._prune()
@@ -78,25 +87,34 @@ class Feedback:
 
     def remove(self, source):
         with self.store.db:
-            self.store.db.execute('DELETE FROM moderation_feedback WHERE source=?', (source,))
-            self.store.db.execute('DELETE FROM feedback_jobs WHERE source=?',(source,))
+            self._remove(self.store.db, source)
+
+    @staticmethod
+    def _remove(db, source):
+        db.execute('DELETE FROM moderation_feedback WHERE source=?', (source,))
+        db.execute('DELETE FROM feedback_jobs WHERE source=?', (source,))
 
     def queue(self, source, rule, verdict, note, evidence=''):
-        if not compact(note):
-            self.discard_auto(source)
-            return
-        edited = self.store.db.execute('SELECT edited FROM moderation_feedback WHERE source=?',(source,)).fetchone()
-        if edited and edited['edited']:
-            return
-        payload = json.dumps(dict(note=compact(note,2000),evidence=compact(evidence,2000)),ensure_ascii=False)
         with self.store.db:
-            self.store.db.execute('''INSERT INTO feedback_jobs(source,rule,verdict,payload,revision,updated) VALUES(?,?,?,?,?,?)
-                ON CONFLICT(source) DO UPDATE SET rule=excluded.rule,verdict=excluded.verdict,payload=excluded.payload,
-                revision=excluded.revision,updated=excluded.updated,attempts=0,next_try=0,error='' ''',
-                (source,compact(rule,80),verdict,payload,uuid.uuid4().hex,time.time()))
-            self.store.db.execute('DELETE FROM moderation_feedback WHERE source=? AND edited=0',(source,))
-        if self.on_queue:
+            queued = self._queue(self.store.db, source, rule, verdict, note, evidence)
+        if queued and self.on_queue:
             self.on_queue(source)
+
+    def _queue(self, db, source, rule, verdict, note, evidence):
+        note = compact(note, 2000)
+        if not note:
+            self._discard_auto(db, source)
+            return False
+        edited = db.execute('SELECT edited FROM moderation_feedback WHERE source=?',(source,)).fetchone()
+        if edited and edited['edited']:
+            return False
+        payload = json.dumps(dict(note=note,evidence=compact(evidence,2000)),ensure_ascii=False)
+        db.execute('''INSERT INTO feedback_jobs(source,rule,verdict,payload,revision,updated) VALUES(?,?,?,?,?,?)
+            ON CONFLICT(source) DO UPDATE SET rule=excluded.rule,verdict=excluded.verdict,payload=excluded.payload,
+            revision=excluded.revision,updated=excluded.updated,attempts=0,next_try=0,error='' ''',
+            (source,compact(rule,80),verdict,payload,uuid.uuid4().hex,time.time()))
+        db.execute('DELETE FROM moderation_feedback WHERE source=? AND edited=0',(source,))
+        return True
 
     def case(self, case, resolution, note):
         source = 'case:'+case['id']
@@ -112,6 +130,33 @@ class Feedback:
     def record(self, row, note=''):
         source = 'record:'+row['id']
         self.queue(source,row.get('reason',''),'violation',note,row.get('reason',''))
+
+    async def restore_records(self, before, after):
+        queued = await run_in_threadpool(self._restore_records, before, after)
+        if self.on_queue:
+            for source in queued:
+                self.on_queue(source)
+
+    def _restore_records(self, before, after):
+        previous = {row['id']: (row['reason'], row['notes'][:2000]) for row in before}
+        restored = {row['id']: row for row in after}
+        queued = []
+        with connect(self.store.path, close_on_exit=True) as db:
+            db.execute('BEGIN IMMEDIATE')
+            sources = db.execute("""
+                SELECT source FROM moderation_feedback WHERE source GLOB 'record:*'
+                UNION
+                SELECT source FROM feedback_jobs WHERE source GLOB 'record:*'
+            """).fetchall()
+            for row in sources:
+                if row['source'].removeprefix('record:') not in restored:
+                    self._remove(db, row['source'])
+            for record_id, row in restored.items():
+                reason, note = row['reason'], row['notes'][:2000]
+                source = 'record:'+record_id
+                if previous.get(record_id) != (reason, note) and self._queue(db, source, reason, 'violation', note, reason):
+                    queued.append(source)
+        return queued
 
     async def process(self, monitor, manual=True, limit=6, sources=None):
         """Extract reusable boundary corrections; never publish raw human notes."""
@@ -158,17 +203,13 @@ class Feedback:
                     if not isinstance(summary,str) or len(summary)>480 or (item['reusable'] and not summary.strip()):
                         raise ValueError('反馈摘要无效')
                     parsed[item['source']] = summary if item['reusable'] else ''
-                for job in jobs:
-                    current = self.store.db.execute('SELECT revision FROM feedback_jobs WHERE source=?',(job['source'],)).fetchone()
-                    if not current or current['revision']!=job['revision']:
-                        continue
-                    summary = parsed[job['source']]
-                    if summary:
-                        self.put(job['source'],job['rule'],job['verdict'],summary)
-                    else:
-                        self.discard_auto(job['source'],cancel=False)
-                    with self.store.db:
-                        self.store.db.execute('DELETE FROM feedback_jobs WHERE source=? AND revision=?',(job['source'],job['revision']))
+                with self.store.db:
+                    for job in jobs:
+                        source = job['source']
+                        matched = self.store.db.execute('DELETE FROM feedback_jobs WHERE source=? AND revision=?',
+                                                        (source, job['revision']))
+                        if matched.rowcount:
+                            self._put(source, job['rule'], job['verdict'], parsed[source])
                 return len(jobs)
             except (httpx.HTTPError,ValueError,KeyError,IndexError,TypeError):
                 with self.store.db:
