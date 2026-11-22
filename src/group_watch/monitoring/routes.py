@@ -1,5 +1,5 @@
 from group_watch.web.schemas import Decision, RegisteredCase
-from group_watch.settings import ROOT, push_recipients
+from group_watch.settings import push_recipients
 from group_watch.monitoring.store import MONITORED_CASE
 from group_watch.monitoring.rules import LIMITATIONS, POLICIES, readable_message
 import secrets
@@ -32,12 +32,10 @@ def install(app, cfg, monitor, chat, auth, started, evidence=None):
 
 
     @app.get('/api/status')
-    async def status(request: Request):
-        if not auth.authenticated(request):
-            return {'project_root':str(ROOT), 'counts':{'open':monitor.store.counts().get('open',0)}}
+    async def status():
         tasks = [{'done':t.done(), 'cancelled':t.cancelled()} for t in monitor.tasks]
         qq_port = urlsplit(cfg.ws_url).port or (443 if cfg.ws_url.startswith('wss:') else 80) if cfg.ws_url else None
-        return dict(project_root=str(ROOT), connected=monitor.connected, qq_port=qq_port, last_event=monitor.last_event, last_message=monitor.last_message,
+        return dict(connected=monitor.connected, qq_port=qq_port, last_event=monitor.last_event, last_message=monitor.last_message,
                     error=monitor.error, review_error=monitor.review_error, notify_error=monitor.notify_error,
                     ds_configured=bool(cfg.ds_key.get_secret_value()), push_configured=bool(push_recipients(cfg)),
                     push_enabled=cfg.pushplus_enabled, started=started, ds_model=cfg.ds_model,

@@ -12,10 +12,13 @@ def worker(config, port):
     from group_watch.launcher import process_lock
     from group_watch.launcher import LOGS
     from group_watch.logging_setup import configure
-    configure(LOGS, managed=os.environ.get('GROUP_WATCH_MANAGED') == '1')
+    managed = os.environ.get('GROUP_WATCH_MANAGED') == '1'
+    configure(LOGS, managed=managed)
     cfg = load_settings(config)
     with process_lock(Path(cfg.db_path).with_suffix('.lock')):
         application = create_app(cfg)
+        application.state.supervisor_instance = os.environ.get('GROUP_WATCH_SUPERVISOR_INSTANCE') if managed else None
+        application.state.legacy_supervisor = managed and not application.state.supervisor_instance
         server = uvicorn.Server(uvicorn.Config(application, host='127.0.0.1', port=port,
             log_config=None, log_level='info', access_log=False,
             proxy_headers=True, forwarded_allow_ips='127.0.0.1,::1'))

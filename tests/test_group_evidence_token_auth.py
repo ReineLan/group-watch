@@ -1,10 +1,12 @@
 """Shared workspace authentication on the native ASGI application."""
 import re
+import time
 import pytest
 from fastapi.testclient import TestClient
 from group_watch.app import create_app
 from group_watch.settings import Settings
 from group_watch.monitoring.service import Monitor
+from group_watch.paths import ROOT
 
 TOKEN='fixture-token-'+'x'*32
 
@@ -18,7 +20,7 @@ def client(tmp_path,monkeypatch):
         if monitor.client: await monitor.client.aclose()
         monitor.store.db.close()
     monitor.start,monitor.stop=start,stop
-    with TestClient(create_app(cfg,monitor),base_url='http://127.0.0.1') as client:
+    with TestClient(create_app(cfg,monitor),base_url='http://127.0.0.1',client=('127.0.0.1',50000)) as client:
         yield client
 
 
@@ -29,13 +31,24 @@ def test_private_resources_require_shared_session(client):
     page=client.get('/')
     assert 'set-cookie' not in page.headers
     assert client.get('/api/auth/session').json()=={'authenticated':False}
-    for path in ['/api/cases','/api/settings/rules','/api/maintenance','/evidence/api/records']:
+    for path in ['/api/status','/api/cases','/api/settings/rules','/api/maintenance','/evidence/api/records']:
         assert client.get(path).status_code==401
-    assert set(client.get('/api/status').json())=={'project_root','counts'}
     response=client.post('/api/auth/login',json={'token':TOKEN})
     assert 'HttpOnly' in response.headers['set-cookie'] and 'Path=/;' in response.headers['set-cookie']
     assert client.get('/evidence/api/records').json()==[]
     assert 'group_session' not in client.cookies
+    status = client.get('/api/status')
+    assert status.status_code == 200
+    assert 'project_root' not in status.json()
+    assert 'open' not in status.json()['counts']
+
+
+def test_legacy_supervisor_status_requires_direct_local_connection(client):
+    client.app.state.legacy_supervisor = True
+    assert client.get('/api/status').json() == {'project_root': str(ROOT)}
+    proxy_headers = {'X-Forwarded-For': '203.0.113.1'}
+    assert client.get('/api/status', headers=proxy_headers).status_code == 401
+    assert client.get('/api/maintenance/update-token', headers=proxy_headers).status_code == 403
 
 
 def test_login_logout_bearer_and_csrf(client):
@@ -70,6 +83,33 @@ def test_shutdown_rejects_busy_work_and_accepts_drained_instance(client):
     maintenance.busy=False
     maintenance.draining=True
     assert client.post('/api/maintenance/shutdown').status_code==200
+
+
+def test_update_waits_for_pending_review_and_allows_retry(client):
+    app = client.app
+    app.state.supervisor_instance = 'fixture-instance'
+    app.state.shutdown = lambda: None
+    control = client.get('/api/maintenance/update-token').json()
+    assert control['instance'] == 'fixture-instance'
+    client.headers['x-csrf-token'] = control['token']
+    maintenance = app.state.maintenance
+    maintenance.last_activity = time.time() - 121
+    candidates = app.state.monitor.store.window_state.candidates
+    candidate = {'id': 'test', 'group_id': 123456, 'user_id': 7654321}
+
+    candidates['test'] = candidate
+    assert client.post('/api/maintenance/drain').status_code == 409
+    assert not maintenance.draining
+
+    candidates.clear()
+    assert client.post('/api/maintenance/drain').status_code == 200
+    candidates['test'] = candidate
+    assert client.post('/api/maintenance/restart').status_code == 409
+    assert not maintenance.draining
+
+    candidates.clear()
+    assert client.post('/api/maintenance/drain').status_code == 200
+    assert client.post('/api/maintenance/restart').status_code == 200
 
 
 def test_chinese_password_and_expired_session(client):

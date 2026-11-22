@@ -7,7 +7,21 @@ from fastapi.responses import HTMLResponse
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
+from group_watch.paths import ROOT
+
 import re
+
+
+SUPERVISOR_ROUTES = frozenset({
+    '/api/maintenance/update-token', '/api/maintenance/drain',
+    '/api/maintenance/restart', '/api/maintenance/shutdown',
+})
+
+
+def direct_local_request(request, local_host):
+    return (local_host and request.client is not None and request.client.host in ('127.0.0.1', '::1')
+            and not any(header in request.headers for header in (
+                'forwarded', 'x-forwarded-for', 'x-forwarded-host', 'x-forwarded-proto', 'x-real-ip')))
 
 
 def install(app, cfg, auth, maintenance, csrf):
@@ -26,17 +40,18 @@ def install(app, cfg, auth, maintenance, csrf):
         expected_origin = cfg.public_url if public_host and host == public_host else str(request.base_url).rstrip('/')
         if request.headers.get('origin') and request.headers['origin'] != expected_origin:
             return JSONResponse({'error':'请求来源不匹配'}, status_code=403)
-        if not local_host and request.url.path.rstrip('/') in (
-                '/api/maintenance/update-token', '/api/maintenance/drain',
-                '/api/maintenance/restart', '/api/maintenance/shutdown'):
+        path = request.url.path
+        if path.rstrip('/') in SUPERVISOR_ROUTES and not direct_local_request(request, local_host):
             return JSONResponse({'error':'仅限本机维护'}, status_code=403)
-        is_evidence = request.url.path.startswith('/evidence/')
-        login = request.url.path in ('/evidence/auth/login', '/api/auth/login')
-        live_ingest = request.url.path == '/internal/events/live'
-        # Minimal supervisor controls remain local and CSRF protected; no archive,
-        # settings, group identities or messages are exposed before login.
-        public = {'/api/auth/session', '/api/status', '/api/maintenance/update-token', '/api/maintenance/drain', '/api/maintenance/restart', '/api/maintenance/shutdown'}
-        if (is_evidence or request.url.path.startswith('/api/')) and not login and request.url.path not in public and not auth.authenticated(request):
+        is_evidence = path.startswith('/evidence/')
+        login = path in ('/evidence/auth/login', '/api/auth/login')
+        live_ingest = path == '/internal/events/live'
+        public = path == '/api/auth/session' or path in SUPERVISOR_ROUTES
+        if (is_evidence or path.startswith('/api/')) and not login and not public and not auth.authenticated(request):
+            # An auto-update replaces the worker before the old supervisor is restarted.
+            if (path == '/api/status' and request.method == 'GET'
+                    and getattr(app.state, 'legacy_supervisor', False) and direct_local_request(request, local_host)):
+                return JSONResponse({'project_root': str(ROOT)})
             return JSONResponse({'error':'请输入密码进入工作台'}, status_code=401)
         if request.url.path in ('/', '/api/cases') or (is_evidence and request.url.path != '/evidence/query'):
             maintenance.last_activity = time.time()

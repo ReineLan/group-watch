@@ -67,6 +67,17 @@ def occupied(port):
         return probe.connect_ex(('127.0.0.1', port)) == 0
 
 
+def supervisor_token(client, instance):
+    response = client.get('/api/maintenance/update-token')
+    response.raise_for_status()
+    details = response.json()
+    if isinstance(details, dict) and details.get('instance') == instance:
+        token = details.get('token')
+        if isinstance(token, str) and token:
+            return token
+    return None
+
+
 def stop():
     state = read_state()
     if not state:
@@ -82,9 +93,10 @@ def stop():
 
 
 def background(config, port):
+    config_path = str(config.resolve())
     state = read_state()
     if state:
-        if state.get('port') != port or state.get('config') != str(config.resolve()):
+        if state.get('port') != port or state.get('config') != config_path:
             raise RuntimeError('此项目已由另一配置或端口运行')
         print(f'已运行：http://127.0.0.1:{port}')
         return
@@ -94,18 +106,19 @@ def background(config, port):
     process = subprocess.Popen([sys.executable, '-m', 'group_watch', 'serve', '--config', str(config), '--port', str(port)],
         cwd=ROOT, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         creationflags=flags, start_new_session=os.name!='nt')
-    for _ in range(40):
-        if process.poll() is not None:
-            raise RuntimeError('启动失败，请查看 logs/group-watch 下的 Loguru 日志')
-        try:
-            health = httpx.get(f'http://127.0.0.1:{port}/api/status', timeout=1, trust_env=False).json()
+    with httpx.Client(base_url=f'http://127.0.0.1:{port}', timeout=1, trust_env=False) as client:
+        for _ in range(40):
+            if process.poll() is not None:
+                raise RuntimeError('启动失败，请查看 logs/group-watch 下的 Loguru 日志')
             state = read_state()
-            if state and health.get('project_root') == str(ROOT):
-                print(f'已启动：http://127.0.0.1:{port}（Python 守护 PID {state["pid"]}）')
-                return
-        except (httpx.HTTPError, ValueError):
-            pass
-        time.sleep(1)
+            if state and state.get('port') == port and state.get('config') == config_path:
+                try:
+                    if supervisor_token(client, state['instance']):
+                        print(f'已启动：http://127.0.0.1:{port}（Python 守护 PID {state["pid"]}）')
+                        return
+                except (httpx.HTTPError, ValueError, KeyError):
+                    pass
+            time.sleep(1)
     # This handle is ours, but leave an unready supervisor available for diagnosis/stop.
     raise RuntimeError('启动尚未就绪，请查看日志；可用 group-watch stop 停止本次实例')
 
@@ -127,8 +140,11 @@ def pipe_output(stream, source, *, protocol=False):
 
 
 class Child:
-    def __init__(self, name, args, cwd, *, protocol=False, direct_output=False):
+    def __init__(self, name, args, cwd, *, protocol=False, direct_output=False, supervisor_instance=None):
         self.name = name
+        env = {**os.environ, 'PYTHONUTF8':'1', 'GROUP_WATCH_MANAGED':'1'}
+        if supervisor_instance:
+            env['GROUP_WATCH_SUPERVISOR_INSTANCE'] = supervisor_instance
         with contextlib.ExitStack() as outputs:
             stdout = stderr = subprocess.PIPE
             if direct_output:
@@ -138,7 +154,7 @@ class Child:
                 stderr=outputs.enter_context((LOGS/'snowluma.stderr.log').open('ab'))
             self.process = subprocess.Popen(args, cwd=cwd, stdin=subprocess.DEVNULL,
                 stdout=stdout, stderr=stderr, text=True, encoding='utf-8', errors='replace',
-                env={**os.environ, 'PYTHONUTF8':'1', 'GROUP_WATCH_MANAGED':'1'},
+                env=env,
                 creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
         self.saved = identity(self.process.pid)
         self.readers = []
@@ -166,19 +182,18 @@ class Child:
             reader.join(timeout=2)
 
 
-def graceful_web(port):
+def graceful_web(port, instance):
     try:
         with httpx.Client(base_url=f'http://127.0.0.1:{port}', trust_env=False, timeout=3) as client:
-            status = client.get('/api/status').json()
-            if status.get('project_root') != str(ROOT):
+            token = supervisor_token(client, instance)
+            if not token:
                 return False
-            token = client.get('/api/maintenance/update-token').json()['token']
             return client.post('/api/maintenance/shutdown', headers={'x-csrf-token':token}).is_success
     except (httpx.HTTPError, ValueError, KeyError):
         return False
 
 
-def update(port, config):
+def update(port, config, instance):
     command = [sys.executable, str(ROOT/'tools/group-watch-update.py'), '--config', str(config)]
     try:
         # The check may run dependency installs and a frontend build before reporting ready.
@@ -186,9 +201,9 @@ def update(port, config):
         if not json.loads(result.stdout).get('ready'):
             return False
         with httpx.Client(base_url=f'http://127.0.0.1:{port}', trust_env=False, timeout=3) as client:
-            if client.get('/api/status').json().get('counts', {}).get('open', 0):
+            token = supervisor_token(client, instance)
+            if not token:
                 return False
-            token = client.get('/api/maintenance/update-token').json()['token']
             headers = {'x-csrf-token':token}
             client.post('/api/maintenance/drain', headers=headers).raise_for_status()
             client.post('/api/maintenance/restart', headers=headers).raise_for_status()
@@ -245,10 +260,11 @@ def serve(config, port):
                     else:
                         snow=Child('SnowLuma',[str(node),str(snow_root/'index.mjs')],snow_root,direct_output=True)
                 if web is None and now>=next_web:
-                    web=Child('Web',[sys.executable,'-m','group_watch','_worker','--config',str(config),'--port',str(port)],ROOT,protocol=True)
+                    web=Child('Web',[sys.executable,'-m','group_watch','_worker','--config',str(config),'--port',str(port)],
+                              ROOT,protocol=True,supervisor_instance=instance)
                 if cfg.automatic_updates and now>=next_update and web and occupied(port):
                     next_update=now+3600
-                    apply_update=update(port,config)
+                    apply_update=update(port,config,instance)
                 time.sleep(1)
         except KeyboardInterrupt:
             logger.info('收到停止请求')
@@ -256,7 +272,7 @@ def serve(config, port):
             if web and web.process.poll() is None:
                 # Finish in-flight backup/query before graceful shutdown (bounded wait).
                 for _ in range(60):
-                    if graceful_web(port): break
+                    if graceful_web(port,instance): break
                     if web.process.poll() is not None: break
                     time.sleep(1)
                 with contextlib.suppress(subprocess.TimeoutExpired): web.process.wait(timeout=15)

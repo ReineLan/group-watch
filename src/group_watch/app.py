@@ -80,7 +80,7 @@ def create_app(cfg, monitor=None):
 
     install_web_security(app, cfg, auth, maintenance, csrf)
     install_web_routes(app, auth, csrf)
-    install_web_maintenance_routes(app, maintenance, queries, csrf)
+    install_web_maintenance_routes(app, maintenance, queries, csrf, monitor.store)
     install_web_settings_routes(app, cfg, monitor, whitelist)
     install_monitoring_routes(app, cfg, monitor, chat, auth, started, evidence)
     install_evidence_registration_routes(app, monitor, evidence)

@@ -78,8 +78,11 @@ def test_public_proxy_keeps_authentication_origin_and_local_maintenance_guards(t
     async def no_backup_loop(self):
         pass
     monitor.start, monitor.stop = start, stop
-    with TestClient(create_app(cfg, monitor), base_url='https://fan.example.test') as client:
+    app = create_app(cfg, monitor)
+    app.state.legacy_supervisor = True
+    with TestClient(app, base_url='https://fan.example.test', client=('127.0.0.1', 50000)) as client:
         assert client.get('/').status_code == 200
+        assert client.get('/api/status').status_code == 401
         assert client.get('/api/cases').status_code == 401
         assert client.get('/', headers={'Host': 'evil.test'}).status_code == 403
         assert client.post('/api/auth/login', json={'token': 'cloud-fixture-password'},

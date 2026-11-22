@@ -4,6 +4,7 @@ import sys
 import time
 from types import SimpleNamespace
 
+import httpx
 from loguru import logger
 import pytest
 
@@ -112,3 +113,27 @@ async def test_failed_backup_does_not_abort_resource_cleanup(tmp_path):
     maintenance.backup_task = asyncio.create_task(failing())
     await maintenance.close()
     assert maintenance.backup_task.done()
+
+
+@pytest.mark.parametrize('matches', [True, False])
+def test_supervisor_controls_require_matching_instance(tmp_path, monkeypatch, matches):
+    from group_watch import launcher
+
+    calls = []
+
+    def handle(request):
+        calls.append(request.url.path.rsplit('/', 1)[-1])
+        if request.method == 'GET':
+            return httpx.Response(200, json={'instance': 'ours' if matches else 'other', 'token': 'fixture'})
+        assert request.headers['x-csrf-token'] == 'fixture'
+        return httpx.Response(200, json={'ok': True})
+
+    client = httpx.Client
+    monkeypatch.setattr(launcher.httpx, 'Client',
+                        lambda **kwargs: client(transport=httpx.MockTransport(handle), **kwargs))
+    monkeypatch.setattr(launcher.subprocess, 'run', lambda *_args, **_kwargs: SimpleNamespace(stdout='{"ready":true}'))
+
+    assert launcher.graceful_web(8066, 'ours') is matches
+    assert launcher.update(8066, tmp_path/'config.json', 'ours') is matches
+    assert calls == (['update-token', 'shutdown', 'update-token', 'drain', 'restart'] if matches
+                     else ['update-token', 'update-token'])

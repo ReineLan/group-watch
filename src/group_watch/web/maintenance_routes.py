@@ -8,7 +8,7 @@ from starlette.concurrency import run_in_threadpool
 import re
 
 
-def install(app, maintenance, queries, csrf):
+def install(app, maintenance, queries, csrf, store):
     @app.get('/api/maintenance')
     async def maintenance_status():
         return maintenance.status(queries)
@@ -36,6 +36,8 @@ def install(app, maintenance, queries, csrf):
         # Supervisor only requests an idle shutdown after the UI has been quiet.
         if queries.active or maintenance.busy or time.time() - maintenance.last_activity < 120:
             raise HTTPException(409, '工作台正在使用，稍后更新')
+        if store.counts()['pending']:
+            raise HTTPException(409, '还有候选等待复核，稍后更新')
         maintenance.draining = True
         return {'ok': True}
 
@@ -43,13 +45,17 @@ def install(app, maintenance, queries, csrf):
     @app.get('/api/maintenance/update-token')
     async def update_token():
         # A local supervisor may prepare shutdown without recording a UI visit.
-        return {'token': csrf}
+        return {'token': csrf, 'instance': getattr(app.state, 'supervisor_instance', None)}
 
 
     @app.post('/api/maintenance/restart')
     async def restart():
         if not maintenance.draining or queries.active or maintenance.busy:
+            maintenance.draining = False
             raise HTTPException(409, '尚未进入更新状态')
+        if store.counts()['pending']:
+            maintenance.draining = False
+            raise HTTPException(409, '还有候选等待复核，稍后更新')
         callback = getattr(app.state, 'shutdown', None)
         if callback is None:
             maintenance.draining = False
