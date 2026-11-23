@@ -1,5 +1,5 @@
 """The platform boundary: live rooms/members enter the ordinary group workflow."""
-from group_watch.sources.qq import Directory
+from group_watch.sources.qq import Directory, member_display_key
 from group_watch.sources.members import Members
 import asyncio
 import json
@@ -76,8 +76,8 @@ class Sources(Directory):
         sender = self.live_member(group, account).get('sender', {})
         return str(sender.get('card') or sender.get('nickname') or '')[:100]
 
-    def verified_identity(self, group, account='', name=''):
-        """Use a verified account or one exact, unambiguous name in a known room."""
+    def verified_identity(self, group, account='', name='', *, display_name=''):
+        """Match an account, an on-screen name, or a manually entered name within one group."""
         if group not in self.group_ids:
             return None
         if group < 0:
@@ -93,6 +93,9 @@ class Sources(Directory):
         if account:
             verified = self.account(group,self.internal_user(group,account))
             matches = [row for row in rows if row['user_id']==verified]
+        elif display_name:
+            label = display_name.strip().casefold()
+            matches = [row for row in rows if label and label == member_display_key(row)]
         else:
             name = str(name).strip().casefold()
             matches = [row for row in rows if name and name in {str(row.get(k,'')).strip().casefold() for k in ('name','nickname','card')}]

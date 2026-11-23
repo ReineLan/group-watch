@@ -29,33 +29,51 @@ function resolveGroup(value){
  return byName||(groups.value.length?'':text)
 }
 let resolveTimer,resolveSeq=0
+function cancelResolve(){
+ resolveSeq++;clearTimeout(resolveTimer)
+}
 function queueResolve(){
- if(!props.open||busy.value)return
- resolveSeq++
- clearTimeout(resolveTimer)
+ cancelResolve()
+ const account=String(form.member_id||'').trim(),group=String(form.group_id||'').trim()
+ const name=account?'':String(form.nickname||'').trim()
+ if(!props.open||props.batch||busy.value||analyzing.value||!group||(!account&&!name))return
+ if(account&&!(group.startsWith('-')?/^-?[1-9]\d{0,18}$/:/^[1-9]\d{4,11}$/).test(account))return
+ const seq=resolveSeq
  resolveTimer=setTimeout(async()=>{
-  const seq=resolveSeq,name=String(form.nickname||form.card||'').trim(),account=String(form.member_id||'').trim(),group=String(form.group_id||'').trim()
-  if(!group||(!name&&!account)||(name&&account))return
   try{
    const {member}=await api('/api/registration/resolve-member',{group_id:group,name,account})
-   if(member&&props.open&&seq===resolveSeq){
-    if(!String(form.member_id||'').trim())form.member_id=member.member_id
-    if(member.card!=null&&form.card==null)form.card=member.card
-    if(member.nickname!=null&&(form.nickname==null||String(form.nickname).trim()===member.member_id))form.nickname=member.nickname
-   }
+   if(!member||!props.open||seq!==resolveSeq)return
+   form.member_id=member.member_id
+   form.card=member.card??null
+   if(member.nickname!=null)form.nickname=member.nickname
   }catch{/* 自动补全失败仍可手动填写账号 */}
  },400)
 }
-watch(()=>[form.nickname,form.card,form.group_id,form.member_id],(cur,prev)=>{
- const text=v=>String(v??'').trim()
- if(cur.some((v,i)=>!text(v)&&text(prev[i]))&&!cur.some((v,i)=>text(v)&&text(v)!==text(prev[i]))){
-  resolveSeq++;clearTimeout(resolveTimer);return // 纯删除：取消待发解析，不回填
- }
+function editAccount(event){
+ const value=event.target.value
+ if(event.target.composing||event.isComposing||String(form.member_id??'')===value)return
+ form.member_id=value;form.nickname=null;form.card=null
  queueResolve()
+}
+function editNickname(event){
+ if(event.target.composing||event.isComposing)return
+ form.nickname=event.target.value
+ if(String(form.member_id||'').trim())cancelResolve()
+ else queueResolve()
+}
+function editGroup(value){
+ if(form.group_id===value)return
+ form.group_id=value;form.card=null
+ if(form.member_id||!analysis.value)queueResolve()
+ else cancelResolve()
+}
+watch(()=>groups.value.length,()=>{
+ if(!props.open)return
+ const group=resolveGroup(form.group_id)
+ if(group!==form.group_id){cancelResolve();form.group_id=group}
 })
-watch(()=>groups.value.length,()=>{if(props.open)form.group_id=resolveGroup(form.group_id)})
 onMounted(()=>document.addEventListener('paste',pasteImages))
-onBeforeUnmount(()=>{session++;resolveSeq++;clearTimeout(resolveTimer);analysisController?.abort();document.removeEventListener('paste',pasteImages)})
+onBeforeUnmount(()=>{session++;cancelResolve();clearUploads();analysisController?.abort();document.removeEventListener('paste',pasteImages)})
 function pasteImages(event){
  if(!props.open||previewImage.value||busy.value||analyzing.value)return
  const items=[...(event.clipboardData?.items||[])].filter(item=>item.kind==='file'&&item.type.startsWith('image/')).map(item=>item.getAsFile()).filter(Boolean)
@@ -66,7 +84,7 @@ function pasteImages(event){
 const fields=['id','member_id','nickname','card','group_id','event_date','reason','punishment','operator','notes','occurrence','penalty_text','decision_detail']
 function close(){if(!busy.value)emit('close')}
 watch(()=>props.open,open=>{
- previewImage.value=null;session++;analysisController?.abort();analyzing.value=false;aiRows.value=[];personIndex.value=0;analysisError.value=''
+ previewImage.value=null;session++;cancelResolve();clearUploads();analysisController?.abort();analyzing.value=false;aiRows.value=[];personIndex.value=0;analysisError.value=''
  if(!open)return
  for(const key of fields)form[key]=['nickname','card'].includes(key)?null:''
  dateEdited.value=false;form.event_date=localDate();form.group_id=resolveGroup(localStorage.getItem('group-evidence-group'));localStorage.removeItem('group-evidence-operator')
@@ -77,35 +95,68 @@ watch(()=>props.open,open=>{
  const pendingShot=props.draft?.pendingShot,at=session
  if(pendingShot)Promise.resolve(pendingShot).then(shot=>{if(shot&&at===session&&uploads.value.length<8)uploads.value.push(shot)})
  form.notes=props.record?recordRemarks(props.record):props.draft?.notes||''
- if(props.draft?.autoAnalyze)nextTick(()=>analyzeImages())
+ if(props.draft?.autoAnalyze)nextTick(()=>{if(at===session)analyzeImages()})
+ else if(form.member_id&&!String(form.nickname??'').trim())queueResolve()
  initialDecision=props.record?(props.record.penalty_text||''):'';form.decision_detail=initialDecision
 },{immediate:true})
 
 function stashPerson(){if(aiRows.value.length)Object.assign(aiRows.value[personIndex.value],{form:{...form},dateEdited:dateEdited.value})}
-function selectPerson(index){stashPerson();personIndex.value=index;Object.assign(form,aiRows.value[index].form);dateEdited.value=aiRows.value[index].dateEdited}
-function removePerson(){if(busy.value||analyzing.value||aiRows.value.length<2)return;aiRows.value.splice(personIndex.value,1);personIndex.value=Math.min(personIndex.value,aiRows.value.length-1);Object.assign(form,aiRows.value[personIndex.value].form);dateEdited.value=aiRows.value[personIndex.value].dateEdited}
+function selectPerson(index){if(index===personIndex.value)return;cancelResolve();stashPerson();personIndex.value=index;Object.assign(form,aiRows.value[index].form);dateEdited.value=aiRows.value[index].dateEdited}
+function removePerson(){if(busy.value||analyzing.value||aiRows.value.length<2)return;cancelResolve();aiRows.value.splice(personIndex.value,1);personIndex.value=Math.min(personIndex.value,aiRows.value.length-1);Object.assign(form,aiRows.value[personIndex.value].form);dateEdited.value=aiRows.value[personIndex.value].dateEdited}
 function shareDecision(){stashPerson();for(const row of aiRows.value)for(const key of ['punishment','decision_detail','operator'])row.form[key]=form[key];notify('处理决定已用于所有人，仍可逐人调整')}
 async function analyzeImages(){
  if(analyzing.value||busy.value)return
- const current=session;analyzing.value=true;analysisError.value='';analysisController=new AbortController()
- const timer=setTimeout(()=>analysisController.abort(),300000)
+ cancelResolve()
+ const current=session,controller=new AbortController()
+ analyzing.value=true;analysisError.value='';analysisController=controller
+ const timer=setTimeout(()=>controller.abort(),300000)
  try{
-  const result=await api('/api/registration/analyze',{images:uploads.value.map(({name,data})=>({name,data})),case_id:props.draft?.case_id||'',context:form.notes||''},{signal:analysisController.signal})
+  const images=await prepareUploads()
   if(current!==session)return
-  aiRows.value=result.people.map(person=>({analysis:{explanation:person.explanation,decision_detail:person.decision_detail},dateEdited:dateEdited.value,form:{...form,id:'',member_id:person.member_id,nickname:person.nickname,card:person.card??null,group_id:person.group_id,event_date:registrationDate(dateEdited.value?form.event_date:'',person.event_date),reason:person.reason,punishment:form.punishment||person.punishment||'',decision_detail:form.decision_detail||''}}))
+  const result=await api('/api/registration/analyze',{images:images.map(({name,data})=>({name,data})),case_id:props.draft?.case_id||'',context:form.notes||''},{signal:controller.signal})
+  if(current!==session)return
+  aiRows.value=result.people.map(person=>({analysis:{display_name:person.display_name,explanation:person.explanation,decision_detail:person.decision_detail},dateEdited:dateEdited.value,form:{...form,id:'',member_id:person.member_id,nickname:person.nickname,card:person.card??null,group_id:person.group_id,event_date:registrationDate(dateEdited.value?form.event_date:'',person.event_date),reason:person.reason,punishment:form.punishment||person.punishment||'',decision_detail:form.decision_detail||''}}))
   personIndex.value=0;Object.assign(form,aiRows.value[0].form)
  }catch(e){if(current===session)analysisError.value=e.name==='AbortError'?'分析已停止或超时，表单内容已保留，可重试。':e.message}
  finally{clearTimeout(timer);if(current===session)analyzing.value=false}
 }
-async function addFiles(list){
+const imageExtensions={'image/png':'png','image/jpeg':'jpg','image/webp':'webp'}
+function addFiles(list){
  if(busy.value||analyzing.value)return
- const current=session;busy.value=true;error.value=''
- try{for(const file of list){if(uploads.value.length>=8)throw new Error('最多上传 8 张图片');if(!['image/png','image/jpeg','image/webp'].includes(file.type))throw new Error('请选择 PNG、JPG 或 WebP 图片');if(file.size>5*1024*1024)throw new Error('每张图片最大 5 MB');const preview=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(new Error('图片读取失败'));reader.readAsDataURL(file)});if(current===session)uploads.value.push({name:form.event_date.replaceAll('-','').slice(2)+'-'+(uploads.value.length+1)+'.'+({'image/png':'png','image/jpeg':'jpg','image/webp':'webp'}[file.type]),original_name:file.name,data:preview.split(',')[1],preview})}}
- catch(e){error.value=e.message}finally{busy.value=false;if(files.value)files.value.value=''}
+ error.value=''
+ try{
+  for(const file of list){
+   if(uploads.value.length>=8)throw new Error('最多上传 8 张图片')
+   const extension=imageExtensions[file.type]
+   if(!extension)throw new Error('请选择 PNG、JPG 或 WebP 图片')
+   if(file.size>5*1024*1024)throw new Error('每张图片最大 5 MB')
+   const name=form.event_date.replaceAll('-','').slice(2)+'-'+(uploads.value.length+1)+'.'+extension
+   uploads.value.push({name,original_name:file.name,file,preview:URL.createObjectURL(file)})
+  }
+ }catch(e){error.value=e.message}finally{if(files.value)files.value.value=''}
+}
+function removeUpload(index){
+ const [image]=uploads.value.splice(index,1)
+ if(image?.file)URL.revokeObjectURL(image.preview)
+}
+function clearUploads(){
+ for(const image of uploads.value)if(image.file)URL.revokeObjectURL(image.preview)
+ uploads.value=[]
+}
+function prepareUploads(){
+ return Promise.all(uploads.value.map(({file,preview,...image})=>{
+  if(!file)return image
+  return new Promise((resolve,reject)=>{
+   const reader=new FileReader()
+   reader.onload=()=>resolve({...image,data:reader.result.split(',')[1]})
+   reader.onerror=()=>reject(new Error('图片读取失败'))
+   reader.readAsDataURL(file)
+  })
+ }))
 }
 async function save(){
- if(busy.value||analyzing.value)return;busy.value=true;error.value=''
- try{stashPerson();if(aiRows.value.length>1){const missing=aiRows.value.findIndex(row=>!['group_id','event_date','punishment','reason'].every(key=>String(row.form[key]||'').trim())||!String(row.form.member_id||'').trim());if(missing>=0){selectPerson(missing);throw new Error('请补齐第 '+(missing+1)+' 人的成员、日期和处理决定')}}const payload=aiRows.value.length>1?{records:aiRows.value.map(row=>buildRecordPayload(row.form,uploads.value,''))}:buildRecordPayload(form,uploads.value,initialDecision,props.batch?batchText.value:undefined);const result=await api(props.batch||aiRows.value.length>1?'/api/batch':'/api/records',payload,{evidence:true});const ids=Array.isArray(result.ids)?result.ids.filter(Boolean):(result.id?[result.id]:[]);const caseId=props.record?'':(props.draft?.case_id||'');localStorage.setItem('group-evidence-group',form.group_id);window.dispatchEvent(new Event('workbench-backups-changed'));emit('saved',{id:result.id,ids,caseId});emit('close');if(!caseId)notify('档案已保存');await load().catch(()=>{})}
+ if(busy.value||analyzing.value)return;cancelResolve();busy.value=true;error.value=''
+ try{stashPerson();if(aiRows.value.length>1){const missing=aiRows.value.findIndex(row=>!['group_id','event_date','punishment','reason'].every(key=>String(row.form[key]||'').trim())||!String(row.form.member_id||'').trim());if(missing>=0){selectPerson(missing);throw new Error('请补齐第 '+(missing+1)+' 人的成员、日期和处理决定')}}const images=await prepareUploads();const payload=aiRows.value.length>1?{records:aiRows.value.map(row=>buildRecordPayload(row.form,images,''))}:buildRecordPayload(form,images,initialDecision,props.batch?batchText.value:undefined);const result=await api(props.batch||aiRows.value.length>1?'/api/batch':'/api/records',payload,{evidence:true});const ids=Array.isArray(result.ids)?result.ids.filter(Boolean):(result.id?[result.id]:[]);const caseId=props.record?'':(props.draft?.case_id||'');localStorage.setItem('group-evidence-group',form.group_id);window.dispatchEvent(new Event('workbench-backups-changed'));emit('saved',{id:result.id,ids,caseId});emit('close');if(!caseId)notify('档案已保存');await load().catch(()=>{})}
  catch(e){error.value=e.message}finally{busy.value=false}
 }
 </script>
@@ -122,21 +173,21 @@ async function save(){
                         <div class="section-heading"><h3>图片证据 <small id="ev-upload-count">{{uploads.length}} / 8</small></h3><button v-if="!record&&!batch" type="button" class="button primary small" :disabled="busy||analyzing||(!uploads.length&&!draft?.case_id)" @click="analyzeImages">{{analyzing?'正在识别…':'自动识别'}}</button></div><div class="drop-zone" @click="files.click()"
                             id="ev-drop-zone" :class="{dragover:dragging,populated:uploads.length}" @dragenter.prevent="dragging=true" @dragover.prevent="dragging=true" @dragleave.prevent="dragging=false" @drop.prevent="dragging=false;addFiles($event.dataTransfer.files)" @keydown.enter.self.prevent="files.click()" @keydown.space.self.prevent="files.click()" :tabindex="uploads.length?-1:0" :role="uploads.length?'group':'button'" :aria-label="uploads.length?'证据图片':'上传证据图片'"><input id="ev-file-input"
                                 type="file" ref="files" :disabled="busy||analyzing" @change="addFiles($event.target.files)" accept="image/png,image/jpeg,image/webp" multiple hidden><template v-if="!uploads.length"><EvidenceIcon name="upload"/><strong>点击上传、拖入或直接粘贴图片</strong><span>PNG、JPG、WebP · 每张最多 5 MB</span></template>
-                        <div v-if="uploads.length" id="ev-upload-previews" class="upload-previews"><div v-for="(image,i) in uploads" :key="i" class="upload-item" @click.stop @keydown.stop><img :src="localUrl(image.preview||image.url)" :alt="image.name" role="button" tabindex="0" aria-label="放大证据图片" @click.stop="previewImage=image" @keydown.enter.prevent="previewImage=image" @keydown.space.prevent="previewImage=image"><button type="button" :disabled="busy||analyzing" :aria-label="'移除 '+image.name" @click.stop="uploads.splice(i,1)" @keydown.stop>×</button></div><button v-if="uploads.length<8" type="button" class="upload-add" :disabled="busy||analyzing" aria-label="添加证据图片" @click.stop="files.click()" @keydown.stop>＋</button></div></div>
+                        <div v-if="uploads.length" id="ev-upload-previews" class="upload-previews"><div v-for="(image,i) in uploads" :key="i" class="upload-item" @click.stop @keydown.stop><img :src="localUrl(image.preview||image.url)" :alt="image.name" role="button" tabindex="0" aria-label="放大证据图片" @click.stop="previewImage=image" @keydown.enter.prevent="previewImage=image" @keydown.space.prevent="previewImage=image"><button type="button" :disabled="busy||analyzing" :aria-label="'移除 '+image.name" @click.stop="removeUpload(i)" @keydown.stop>×</button></div><button v-if="uploads.length<8" type="button" class="upload-add" :disabled="busy||analyzing" aria-label="添加证据图片" @click.stop="files.click()" @keydown.stop>＋</button></div></div>
 <p v-if="analysisError" class="analysis-error" role="alert">{{analysisError}}</p>
                     </section>
-                    <section v-if="analysis" class="registration-analysis" aria-label="识别结果与建议"><p v-if="analysis.explanation">{{analysis.explanation}}</p><p v-if="analysis.decision_detail" class="handling-advice"><strong>处理建议：</strong>{{analysis.decision_detail}}</p></section>
-                    <div v-if="aiRows.length>1" class="analysis-people"><div role="tablist" aria-label="涉及人员"><button v-for="(row,i) in aiRows" :key="i" type="button" role="tab" :aria-selected="personIndex===i" :class="{active:personIndex===i}" @click="selectPerson(i)">{{i+1}} · {{row.form.nickname??(row.form.member_id||'待确认人员')}}</button></div><button type="button" class="text-link" @click="shareDecision">将本次处理决定用于所有人</button></div>
+                    <section v-if="analysis" class="registration-analysis" aria-label="识别结果与建议"><p v-if="analysis.display_name"><strong>截图显示名：</strong>{{analysis.display_name}}</p><p v-if="analysis.explanation">{{analysis.explanation}}</p><p v-if="analysis.decision_detail" class="handling-advice"><strong>处理建议：</strong>{{analysis.decision_detail}}</p></section>
+                    <div v-if="aiRows.length>1" class="analysis-people"><div role="tablist" aria-label="涉及人员"><button v-for="(row,i) in aiRows" :key="i" type="button" role="tab" :aria-selected="personIndex===i" :class="{active:personIndex===i}" @click="selectPerson(i)">{{i+1}} · {{row.form.nickname||row.analysis.display_name||row.form.member_id||'待确认人员'}}</button></div><button type="button" class="text-link" @click="shareDecision">将本次处理决定用于所有人</button></div>
                     <button v-if="aiRows.length>1" type="button" class="text-link" :disabled="busy||analyzing" @click="removePerson">从本次登记移除当前人员</button>
                     <p v-if="draft?.case_id" class="draft-notice">已关联线索原文。核对无误后选择处理决定，再保存。</p><section class="entry-section">
                         <h3>成员与处理</h3>
-                        <div class="form-grid" id="ev-single-member" :hidden="batch"><label>成员账号 / QQ<input name="member_id" v-model="form.member_id" :disabled="busy||analyzing"
-                                    maxlength="100" placeholder="输入成员账号"></label><label>昵称<input name="nickname" v-model="form.nickname" :disabled="busy||analyzing" maxlength="100"
+                        <div class="form-grid" id="ev-single-member" :hidden="batch"><label>成员账号 / QQ<input name="member_id" :value="form.member_id" @input="editAccount" @compositionend="editAccount" :disabled="busy||analyzing"
+                                    maxlength="100" placeholder="输入成员账号"></label><label>昵称<input name="nickname" :value="form.nickname" @input="editNickname" @compositionend="editNickname" :disabled="busy||analyzing" maxlength="100"
                                     placeholder="自动获取昵称"></label></div>
                         <label class="block-label" id="ev-batch-members-label" :hidden="!batch">成员名单 <em>*</em><textarea
                                 id="ev-batch-members" v-model="batchText" :disabled="busy||analyzing" rows="4" placeholder="每行一人：QQ号 昵称（选填）"></textarea><small>最多 50
                                 人，共用本次事件、处理决定与证据。</small></label>
-                        <div class="form-grid"><label>所属群聊 <em>*</em><SelectBox name="group_id" v-model="form.group_id" :options="groupSelectOptions" :disabled="busy||analyzing" placeholder="请选择群聊" required/></label><label>行为分类 <em>*</em><SuggestBox name="reason" v-model="form.reason" :options="categoryOptions" :disabled="busy||analyzing" maxlength="10000" placeholder="选择或填写具体行为" required/></label></div>
+                        <div class="form-grid"><label>所属群聊 <em>*</em><SelectBox name="group_id" :model-value="form.group_id" @update:model-value="editGroup" :options="groupSelectOptions" :disabled="busy||analyzing" placeholder="请选择群聊" required/></label><label>行为分类 <em>*</em><SuggestBox name="reason" v-model="form.reason" :options="categoryOptions" :disabled="busy||analyzing" maxlength="10000" placeholder="选择或填写具体行为" required/></label></div>
                         <div class="form-grid"><label>处理日期 <em>*</em><input name="event_date" v-model="form.event_date" @input="dateEdited=true" :disabled="busy||analyzing" type="date" required></label><label>处理人<input name="operator" v-model="form.operator" :disabled="busy||analyzing" maxlength="100" placeholder="管理员昵称"></label></div>
                         <div class="form-grid"><label>处罚类型 <em>*</em><SelectBox name="punishment" v-model="form.punishment" :options="['警告','禁言','移出群聊','其他']" :disabled="busy||analyzing" placeholder="请选择处理决定" required/></label><label>时长 / 处理说明<input
                                     name="decision_detail" v-model="form.decision_detail" :disabled="busy||analyzing" maxlength="1000" placeholder="如：禁言3天、永久"></label></div>

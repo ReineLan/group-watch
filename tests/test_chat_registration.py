@@ -132,7 +132,7 @@ def test_registration_tools_identity_budget_and_no_save(tmp_path):
             if len(seen)==1:
                 return httpx.Response(200,json={'choices':[{'message':{'role':'assistant','content':None,'tool_calls':[{'id':'call1','type':'function','function':{'name':'find_members','arguments':'{"group_id":"100000001","query":"12345"}'}}]},'finish_reason':'tool_calls'}]})
             return httpx.Response(200,json={'choices':[{'message':{'role':'assistant','content':json.dumps({'people':[
-                {'member_id':'12345','nickname':'模型昵称','group_id':'100000001','event_date':'2026-10-27','reason':'证据'},
+                {'member_id':'12345','account_evidence':'QQ: 12345','nickname':'模型昵称','group_id':'100000001','event_date':'2026-10-27','reason':'证据'},
                 {'member_id':'99999','nickname':'未知','group_id':'100000001','event_date':'invalid','reason':'不明确','uncertainty':'旧字段应忽略'}]})},'finish_reason':'stop'}]})
         async def no_refresh(): pass
         monitor.directory.refresh=no_refresh
@@ -196,7 +196,7 @@ def test_registration_queries_qq_even_when_model_skips_tools(tmp_path):
                 return {'group_id':100000002,'user_id':100000009,'nickname':'在线昵称','card':'群名片'}
         monitor.directory.qq=FakeQQ()
         monitor.client=httpx.AsyncClient(transport=httpx.MockTransport(lambda request:httpx.Response(200,json={'choices':[{
-            'finish_reason':'stop','message':{'content':json.dumps({'people':[{'member_id':'100000009','nickname':'模型昵称','group_id':'100000002'}]})}}]})))
+            'finish_reason':'stop','message':{'content':json.dumps({'people':[{'member_id':'100000009','account_evidence':'QQ: 100000009','nickname':'模型昵称','group_id':'100000002'}]})}}]})))
         result=await analyze(monitor,[{'data':base64.b64encode(b'\x89PNG\r\n\x1a\nfixture').decode()}])
         assert result['people'][0]['nickname']=='在线昵称'
         assert result['people'][0]['member_id']=='100000009'
@@ -205,13 +205,13 @@ def test_registration_queries_qq_even_when_model_skips_tools(tmp_path):
 
 
 @pytest.mark.parametrize('qq_name,expected',[('', ''),('接口昵称','接口昵称'),('   ','   ')])
-def test_registration_keeps_ds_name_when_departed_members_qq_name_is_empty(tmp_path,qq_name,expected):
+def test_registration_preserves_qq_nickname_including_blank_values(tmp_path,qq_name,expected):
     async def run():
         monitor=Monitor(settings(tmp_path,ds_key=SecretStr('fixture')))
         monitor.directory.groups={100000002:'示例群聊'}
         monitor.directory.members={100000002:{'100000009':{'user_id':'100000009','name':qq_name,'nickname':qq_name}}}
         monitor.client=httpx.AsyncClient(transport=httpx.MockTransport(lambda request:httpx.Response(200,json={'choices':[{
-            'finish_reason':'stop','message':{'content':json.dumps({'people':[{'member_id':'100000009','nickname':'示例成员','group_id':'100000002'}]})}}]})))
+            'finish_reason':'stop','message':{'content':json.dumps({'people':[{'member_id':'100000009','account_evidence':'QQ: 100000009','nickname':'示例成员','group_id':'100000002'}]})}}]})))
         result=await analyze(monitor,[{'data':base64.b64encode(b'\x89PNG\r\n\x1a\nfixture').decode()}])
         assert result['people'][0]['nickname']==expected
         assert result['people'][0]['member_id']=='100000009'
@@ -275,17 +275,28 @@ def test_registration_resolves_only_unique_exact_known_member(tmp_path):
     async def run():
         monitor=Monitor(settings(tmp_path,ds_key=SecretStr('fixture')))
         monitor.directory.groups={100000001:'真实群'}
-        monitor.directory.members={100000001:{'12345':{'name':'群名片','nickname':'烟锅猫'},'99999':{'name':'同名'},'88888':{'name':'同名'}}}
+        monitor.directory.members={100000001:{
+            '12345':{'name':'群名片','card':'群名片','nickname':'真实昵称'},
+            '67890':{'name':'另一张群名片','card':'另一张群名片','nickname':'群名片'},
+            '54321':{'name':'未设名片','card':'','nickname':'未设名片'},
+            '99999':{'name':'同名','card':'同名'}, '88888':{'name':'同名','card':'同名'},
+        }}
         def respond(request):
             return httpx.Response(200,json={'choices':[{'finish_reason':'stop','message':{'content':json.dumps({'people':[
-                {'nickname':'烟锅猫','group_name':'真实群'}, {'nickname':'同名','group_id':'100000001'},
-                {'nickname':'群名片','member_id':'77777','group_id':'100000001'}, {'nickname':'群名片','group_id':'1'}]})}}]})
+                {'display_name':'群名片','nickname':'猜测昵称','group_name':'真实群'},
+                {'display_name':'未设名片','group_id':'100000001'},
+                {'display_name':'同名','member_id':'99999','group_id':'100000001'},
+                {'display_name':'群名片','member_id':'67890','group_id':'100000001'},
+                {'display_name':'群名片','group_id':'1'},
+                {'member_id':'67890','group_id':'100000001'}]})}}]})
         monitor.client=httpx.AsyncClient(transport=httpx.MockTransport(respond))
         result=await analyze(monitor,[{'data':base64.b64encode(b'\x89PNG\r\n\x1a\nfixture').decode()}])
         assert result['people'][0]['member_id']=='12345'
         assert result['people'][0]['group_id']=='100000001'
-        assert result['people'][0]['nickname']=='烟锅猫'
-        assert all(row['member_id']=='' for row in result['people'][1:])
+        assert result['people'][0]['nickname']=='真实昵称'
+        assert result['people'][0]['card']=='群名片'
+        assert result['people'][1]['member_id']=='54321'
+        assert [row['member_id'] for row in result['people'][2:]]==['','12345','','']
         await monitor.stop()
     asyncio.run(run())
 

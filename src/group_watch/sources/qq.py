@@ -8,6 +8,14 @@ import websockets
 READ_ACTIONS = {'get_group_list', 'get_group_member_list', 'get_group_member_info', 'get_friend_list', 'get_stranger_info', 'get_msg', 'get_image', 'fetch_face_entity', '_get_friend_dress'}
 
 
+def member_display_key(row):
+    for key in ('card', 'name', 'nickname'):
+        value = row.get(key)
+        if isinstance(value, str) and value:
+            return value.strip().casefold()
+    return ''
+
+
 class QQ:
     def __init__(self, cfg):
         self.cfg = cfg
@@ -88,8 +96,13 @@ class Directory:
         if group not in self.cfg.groups or not query or len(query)>100:
             raise ValueError('仅能查询受监控群的明确成员线索')
         def matches():
-            return [x for account,x in self.members.get(group, {}).items() if query == account or
-                    any(query in str(x.get(key,'')).casefold() for key in ('name','nickname','card'))][:20]
+            exact, similar = [], []
+            for account, row in self.members.get(group, {}).items():
+                if query == account or query == member_display_key(row):
+                    exact.append(row)
+                elif any(query in str(row.get(key) or '').casefold() for key in ('name', 'nickname', 'card')):
+                    similar.append(row)
+            return (exact + similar)[:20]
         found = matches()
         if found:
             return found
