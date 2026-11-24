@@ -39,6 +39,28 @@ def test_ad_needs_action_or_mass_forwarding():
     assert 'ad' in hits('群号 123456789')
 
 
+def test_trade_needs_action_near_service_name():
+    for text in ('有人用过代充吗', '我想聊聊代购。不相关的建议：加我', '代购不接单'):
+        assert 'ad' not in hits(text)
+    for text in ('代购接单，私聊我报价', '代充，扫码付款', '私聊我代充', '代充？进群领福利'):
+        assert 'ad' in hits(text)
+
+
+def test_privacy_fields_need_a_disclosure_or_request():
+    benign = ('办身份证要带照片吗', '手机号码可以换吗', '真实姓名是必填项吗', '真实姓名：待确认', '他住在一个小区',
+              '群友说开盒不合适', '人肉搜索违法吗', '我能公开问一下怎么改自己的手机号吗', '我喜欢住在带花园的小区')
+    candidates = ('把楼上那位的住址发出来', '谁有楼上那位的手机号，发一下', '把他身份证号发出来',
+                  '这是他的手机号：１３８-００００-００００', '身份证号：00000000000000000X',
+                  '真实姓名：某小明', '她住在某某路1号', '他的家庭住址：某市某区幸福花园3栋',
+                  '她住址是某某公寓三栋', '我要人肉他', '我们一起开盒')
+    for text in benign:
+        assert 'privacy' not in hits(text), text
+    for text in candidates:
+        assert 'privacy' in hits(text), text
+    assert 'privacy' in hits('我要开盒', mentions=['987654'])
+    assert 'privacy' not in hits('开盒是什么意思', mentions=['987654'])
+
+
 def test_repeat_counts_identical_media_and_keeps_others_apart():
     def image(fid):
         return [{'type': 'image', 'data': {'file': fid, 'url': 'https://gchat.qpic.cn/' + fid}}]
@@ -89,11 +111,14 @@ def test_abuse_ignores_family_words_and_untargeted_profanity():
     assert 'abuse' not in hits('傻逼开屏广告')
     assert 'abuse' not in hits('奶龙去死😡😡')
     assert 'abuse' not in hits('这死妈射手还给我举报了')
-    assert 'abuse' in hits('你真是傻逼')
-    assert 'abuse' in hits('妈的，幸亏我跑得快')
-    assert 'abuse' in hits('他妈的')
-    assert 'abuse' in hits('你妈的')
-    assert 'abuse' in hits('滚出去', mentions=['123456'])
+    assert 'abuse' in hits('你真是傻逼', mentions=['123456'])
+    assert 'abuse' not in hits('你真是傻逼')
+    for text in ('妈的，幸亏我跑得快', '他妈的', '你妈的', '滚出去', '你可真是个天才'):
+        assert 'abuse' not in hits(text, mentions=['123456'])
+    for text in ('兰兰这场直播的音质很垃圾', '给兰兰分享一个垃圾分类视频', '兰兰，你的耳机好漂亮'):
+        assert 'lanyin_attack' not in hits(text, mentions=['100000003'])
+    assert 'lanyin_attack' in hits('兰兰，你是废物。')
+    assert 'abuse' in hits('你是废物', recent=[dict(prior('说说你的想法'), mentions=['1'])])
 
 
 def test_meta_discussion_does_not_match_context_rules():
@@ -104,11 +129,12 @@ def test_meta_discussion_does_not_match_context_rules():
     assert 'vulgar' in hits('发色情资源')
     assert 'privacy' not in hits('所以，开盒有门槛')
     assert 'privacy' in hits('开盒他')
-    assert 'privacy' in hits('身份证')
+    assert 'privacy' not in hits('身份证')
     assert 'conflict' not in hits('引战的？那不惯着他，不过也不能随便冲别人')
     assert 'conflict' in hits('粉丝滚')
     assert 'sarcasm' not in hits('就这？')
-    assert 'sarcasm' in hits('急了急了')
+    assert 'sarcasm' not in hits('急了急了')
+    assert 'sarcasm' not in hits('懂的都懂，有些人出现以后这个群就没好过')
 
 
 def test_snowluma_status_is_flagged_as_a_bot_and_image_notices_are_ignored():

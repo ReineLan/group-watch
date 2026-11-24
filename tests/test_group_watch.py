@@ -69,6 +69,67 @@ def test_mentions_repeat_and_flood(tmp_path):
     monitor.store.db.close()
 
 
+def test_mentions_use_same_group_protected_posts_after_normal_window_expires(tmp_path):
+    monitor = Monitor(config(tmp_path, exempt_users=[100000003]))
+    now = time.time()
+    protected = '[CQ:at,qq=100000003]'
+    lunch = '[CQ:image,file=private-lunch-id,url=https://private.test/p]'
+    assert monitor.ingest(event('lunch', lunch, user=100000003, stamp=now-7200), now-7200) == 0
+    assert not monitor.store.window_state.activity
+    for mid, text in (('quoted', '[CQ:reply,id=lunch]'+protected+'好吃！'),
+                      ('specific', protected+'你刚才发的午饭看着好香')):
+        assert monitor.ingest(event(mid, text, stamp=now), now) == 0
+    assert monitor.ingest(event('question', '[CQ:reply,id=lunch]'+protected+'请问几点开播', user=2, stamp=now), now) == 1
+    assert monitor.ingest(event('ambiguous', protected+'好吃', user=3, stamp=now), now) == 1
+    assert monitor.ingest(event('other-group', '[CQ:reply,id=lunch]'+protected+'好吃', group=100000002, stamp=now), now) == 1
+    assert monitor.ingest(event('expired', '[CQ:reply,id=lunch]'+protected+'好吃', user=4, stamp=now+1), now+1) == 1
+    assert monitor.ingest(event('attack', '[CQ:reply,id=lunch]'+protected+'你是废物', user=5, stamp=now+1), now+1) == 2
+    assert any(case['rule'] == 'lanyin_attack' for case in case_rows(monitor.store))
+    payload = review_payload(case_rows(monitor.store))
+    contexts = {c['evidence'][0]: c['mention_context'] for c in payload['candidates'] if c['rule'] == 'mention'}
+    assert contexts['question'] == dict(protected_post_ids=['lunch'], quoted_post_ids=['lunch'], quote_unavailable=False)
+    assert contexts['ambiguous'] == dict(protected_post_ids=['lunch'], quoted_post_ids=[], quote_unavailable=False)
+    assert contexts['other-group'] == contexts['expired'] == dict(protected_post_ids=[], quoted_post_ids=[], quote_unavailable=True)
+    assert any(row['message_id'] == 'lunch' and row['media'] == ['image'] for row in payload['messages'])
+    assert 'private-lunch-id' not in json.dumps(payload) and 'private.test' not in json.dumps(payload)
+    monitor.store.db.close()
+
+
+def test_attack_repeated_after_stop_keeps_stop_and_quotes_as_context(tmp_path):
+    monitor = Monitor(config(tmp_path))
+    now = time.time()
+    assert monitor.ingest(event('statement', '我来说明一下', user=456, stamp=now), now) == 0
+    assert monitor.ingest(event('first', '[CQ:reply,id=statement]小零件又来了', stamp=now+1), now+1) == 0
+    assert monitor.ingest(event('stop', '我刚说过别这么叫', user=456, stamp=now+2), now+2) == 0
+    assert monitor.ingest(event('similar', '[CQ:reply,id=stop]小零食今天也到了', stamp=now+3), now+3) == 0
+    for i in range(13):
+        monitor.ingest(event(f'chat{i}', f'其他聊天{i}', user=1000+i, stamp=now+4+i), now+4+i)
+    assert monitor.ingest(event('again', '[CQ:reply,id=stop]小零件今天也准时上岗了', stamp=now+20), now+20) == 1
+    case, = case_rows(monitor.store)
+    assert case['rule'] == 'abuse' and case['evidence'] == ['first', 'again']
+    payload = review_payload([case])
+    rows = {row['message_id']: row for row in payload['messages']}
+    assert rows['again']['reply_to'] == ['stop'] and rows['first']['reply_to'] == ['statement']
+    assert rows['stop']['text'] == '我刚说过别这么叫'
+    monitor.store.db.close()
+
+
+@pytest.mark.parametrize('text,rule', [
+    ('你就像一只蛀虫，留在这儿只会拖累所有人', 'abuse'),
+    ('像一台只会出错的机器，趁早闭嘴', 'abuse'),
+    ('你像一台永动机啊，也太能试了', None),
+    ('滚，你怎么又出了', None),
+    ('滚出去，轮到我抢你的宝箱了', None),
+])
+def test_attack_filter_needs_more_than_a_comparison_or_rough_language(tmp_path, text, rule):
+    monitor = Monitor(config(tmp_path))
+    now = time.time()
+    monitor.ingest(event('other', '我再说说我的想法', user=456, stamp=now), now)
+    monitor.ingest(event('reply', '[CQ:reply,id=other]'+text, stamp=now+1), now+1)
+    assert [case['rule'] for case in case_rows(monitor.store)] == ([rule] if rule else [])
+    monitor.store.db.close()
+
+
 def test_configured_protected_identifiers(tmp_path):
     cfg = config(tmp_path, protected_qq=100000009, protected_groups=[100000008])
 
@@ -450,6 +511,32 @@ def test_image_urls_and_pixels_are_never_sent_to_review(tmp_path):
     encoded=json.dumps(payload)
     assert 'private-media.test' not in encoded and 'PRIVATE_PIXELS' not in encoded
     assert any(m['media']==['image'] and m['text']=='' for m in payload['messages'])
+    monitor.store.db.close()
+
+
+@pytest.mark.parametrize('kind,ids,expected', [
+    ('face', ['fixture-face']*4, True),
+    ('image', ['fixture-image']*4, True),
+    ('image', ['a','b','c','d'], False),
+    ('image', ['', '', '', ''], False),
+    ('image', ['base64://PRIVATE_PIXELS']*4, False),
+])
+def test_review_only_sends_repeated_media_statistics(tmp_path, kind, ids, expected):
+    monitor = Monitor(config(tmp_path, flood_count=4))
+    now = time.time()
+    for i, fid in enumerate(ids):
+        segment = {'type':kind, 'data':{'file':fid, 'url':'https://private.test/image'}}
+        monitor.ingest(event(str(i), [segment, segment], stamp=now+3*i), now+3*i)
+    payload = review_payload(case_rows(monitor.store))
+    candidates = {row['rule']: row for row in payload['candidates']}
+    assert 'flood' in candidates
+    if expected:
+        for rule in ('flood', 'repeat'):
+            assert candidates[rule]['repeated_media'] == [dict(type=kind, count=4, span_seconds=9)]
+    else:
+        assert all('repeated_media' not in row for row in candidates.values())
+    encoded = json.dumps(payload)
+    assert all(secret not in encoded for secret in ('fixture-face', 'fixture-image', 'private.test', 'PRIVATE_PIXELS'))
     monitor.store.db.close()
 
 
